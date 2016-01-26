@@ -117,9 +117,10 @@ byte encoderPos = 200;		//Target temperature for setting knob position
 #define STEP_CLOSE 1400ul	// duration of a single step while closing the valve in ms
 #define STEP_OPEN 1400ul	// duration of a single step while opening the valve in ms
 #define DELAY_PUMP_BUTTON 5000	// How long to delay turning the circulator on?
-#define INTERVAL_REG 80000	// Interval between temperature checks
+#define INTERVAL_REG 80000	// Interval between 3VW temperature checks
+#define INTERVAL_MAIN_REG 1800000	// Interval between Ambiant temperature checks
 #define TIME_TO_RESET 140000	// Time to completely close the 3WV if position is unknow
-#define MAX_TEMP 400		// Temperature threshold for emitter (40°C for floor heating)
+#define MAX_TEMP 380		// Temperature threshold for emitter (40°C for floor heating)
 #define EPSILON_TEMP 10		// difference between the two last temperature to do nothing (door or window opened in zone)
 
 #include <SPI.h>

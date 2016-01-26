@@ -51,6 +51,7 @@ class HeatingZone
     unsigned long stopServoAt; // when to switch off the actuator
     uint8_t _ServoOn;
     unsigned long lastRegulation;
+    unsigned long last_main_Regulation;
     //unsigned long buttonRegulationStateChange;
     //unsigned long pumpButtonStateChange; // We need to know when the pump button was last pressed, to delay turning it on/off 
 
@@ -110,17 +111,19 @@ HeatingZone::HeatingZone(DallasTemperature *sensors, int *ds18b20_index, uint8_t
 		servoPosition = 0;
 	#endif
 	lastRegulation = 0;
+	last_main_Regulation = 0;
 	
 	#ifdef PPID
 		//#error error
 		//Specify the links and initial tuning parameters
-                target_3WV = 38;
+                target_3WV = 35;
 		way3_PID = new PID (&input, &Output, &target_3WV,2, 2, 0, DIRECT);
-                main_PID = new PID (&main_input, &main_Output, &target,2, 0, 0, DIRECT);
+                main_PID = new PID (&main_input, &main_Output, &target,.2, .2, 0, DIRECT);
 		way3_PID->SetOutputLimits(-200, 200);
-
+		main_PID->SetOutputLimits(-50, 50);
   		//turn the PID on
  		way3_PID->SetMode(AUTOMATIC);
+		main_PID->SetMode(AUTOMATIC);
 	#endif
 	
 }
@@ -153,11 +156,31 @@ present(CHILD_ID_SET_POINT, S_HVAC);
 send(msg_S_HEATER_FLOW_STATE.set(1));
 }
 void HeatingZone::update(void)
-{
-		
-		
-stopServo(); // stop the servo if necessary
+{				
+		stopServo(); // stop the servo if necessary
 
+    		if (millis()-INTERVAL_MAIN_REG >= last_main_Regulation )
+		{
+			
+			main_input = Temperature[0];
+			main_PID->Compute();
+			if (target_3WV + main_Output > MAX_TEMP/10.)
+			{ 
+				target_3WV = MAX_TEMP/10.;
+			}
+			else
+			{
+				target_3WV += main_Output;
+			}
+			Serial.print("\nTemp:");
+			Serial.print(Temperature[0]);
+			Serial.print(" ");
+			Serial.print(target);
+			Serial.print("\nMain Output :");
+			Serial.print(main_Output);
+        	        Serial.print("\n");
+			last_main_Regulation = millis();
+		}
 		if (millis()-INTERVAL_REG >= lastRegulation && digitalRead(_ServoOn) == HIGH )// time for regulation if the servo is not running
 		{
 			regulate();
