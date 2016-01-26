@@ -48,10 +48,10 @@
 
 
 #define OLED			//define all OLED display and rotary knob feature for a heating zone
-#define ENERGY_METER		//define 3 phases electrical comsumption feature
+//#define ENERGY_METER		//define 3 phases electrical comsumption feature
 #define PPID
 #define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.
-#define PRINT_RAM
+//#define PRINT_RAM
 
 
 #ifdef OLED

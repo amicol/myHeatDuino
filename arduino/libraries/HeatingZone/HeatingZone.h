@@ -69,6 +69,7 @@ class HeatingZone
 #ifdef PPID
     double Output;
     double input;
+    double target_3WV;
     PID *way3_PID;
     double main_Output;
     double main_input;
@@ -113,9 +114,10 @@ HeatingZone::HeatingZone(DallasTemperature *sensors, int *ds18b20_index, uint8_t
 	#ifdef PPID
 		//#error error
 		//Specify the links and initial tuning parameters
-		way3_PID = new PID (&input, &Output, &target,2, 0, 0, DIRECT);
+                target_3WV = 38;
+		way3_PID = new PID (&input, &Output, &target_3WV,2, 2, 0, DIRECT);
                 main_PID = new PID (&main_input, &main_Output, &target,2, 0, 0, DIRECT);
-		way3_PID->SetOutputLimits(-20, 20);
+		way3_PID->SetOutputLimits(-200, 200);
 
   		//turn the PID on
  		way3_PID->SetMode(AUTOMATIC);
@@ -153,26 +155,21 @@ send(msg_S_HEATER_FLOW_STATE.set(1));
 void HeatingZone::update(void)
 {
 		
-		stopServo(); // stop the servo if necessary
+		
+stopServo(); // stop the servo if necessary
 
 		if (millis()-INTERVAL_REG >= lastRegulation && digitalRead(_ServoOn) == HIGH )// time for regulation if the servo is not running
 		{
 			regulate();
-			if (Temperature[1]>MAX_TEMP)
-			{
-				closeValve(5);
-			}
+			//if (Temperature[1]>MAX_TEMP)
+			//{
+			//	closeValve(5);
+			//}
 		}
 		
 }
 void HeatingZone::regulate(void){
 		getTempsC();
-		#ifdef PPID
-			input = Temperature[0];
-			way3_PID->Compute();
-			Serial.print("\nOutput :");
-			Serial.print(Output);
-		#endif
 		#ifdef DEBUG
 			Serial.print("\nTemp0"+String(Temperature[0]));
 			//Serial.print("\nTemp1"+String(Temperature[1]));
@@ -184,6 +181,8 @@ void HeatingZone::regulate(void){
 			//{
 			if (regulate_on == true)
 			{
+		//#ifdef PPID
+		//#else
 				if ((Temperature[0] ) >= (target)  ) // we're turning temperatures into integers to compare them
 				{
 					//closeValve(5);
@@ -200,6 +199,18 @@ void HeatingZone::regulate(void){
 				}
 				if (digitalRead(_PumpPin) == LOW)
 				{
+				#ifdef PPID
+					input = Temperature[1]/10.;
+					way3_PID->Compute();
+					Serial.print("\nOutput :");
+					Serial.print(int(Output));
+        		                Serial.print("\n");
+					if (abs(Output)>5.)
+					{
+						setServoTo(servoPosition+int(Output));
+					}
+				#else
+
 					if (Temperature[1]<MAX_TEMP -50 && (Temperature[1]-Temperature_prev[1]<10))
 					{
 						openValve(5);
@@ -208,6 +219,7 @@ void HeatingZone::regulate(void){
 					{
 						closeValve(5);
 					}
+				#endif
 				}
 				if ((servoPosition == 100) && (Temperature[1] < 300))
 				{
@@ -255,7 +267,7 @@ void  HeatingZone::getTempsC(void)
 
 void HeatingZone::openValve(int num_step)
 {			
-	if (servoPosition <= 99 && digitalRead(_ServoOn) == HIGH && Temperature[1]<MAX_TEMP)
+	if ((servoPosition+num_step <= 100) && digitalRead(_ServoOn) == HIGH && Temperature[1]<MAX_TEMP)
 	{
 		#ifdef DEBUG
 			Serial.print("\nopen valve");
@@ -271,7 +283,7 @@ void HeatingZone::openValve(int num_step)
 
 void HeatingZone::closeValve(int num_step)
 {			
-	if (servoPosition >= 1 && digitalRead(_ServoOn) == HIGH)
+	if ((servoPosition - num_step >= 0) && digitalRead(_ServoOn) == HIGH)
 	{	
 		#ifdef DEBUG
 			Serial.print("\nclose valve");
@@ -329,6 +341,8 @@ void HeatingZone::setServoTo(byte requestedPosition)
 {
 	if (requestedPosition != servoPosition && digitalRead(_ServoOn) == HIGH )
 	{
+		if (requestedPosition>100) {requestedPosition=100;}
+		if (requestedPosition<0) {requestedPosition=0;}
 		char numberOfSteps = requestedPosition - servoPosition; 
 		if (numberOfSteps > 0) // if the number is positive or higher than current, open the valve and use X steps 
 		{
