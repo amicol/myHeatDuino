@@ -118,7 +118,7 @@ byte encoderPos = 200;		//Target temperature for setting knob position
 #define STEP_OPEN 1400ul	// duration of a single step while opening the valve in ms
 #define DELAY_PUMP_BUTTON 5000	// How long to delay turning the circulator on?
 #define INTERVAL_REG 80000	// Interval between 3VW temperature checks
-#define INTERVAL_MAIN_REG 1800000	// Interval between Ambiant temperature checks
+#define INTERVAL_MAIN_REG 900000	// Interval between Ambiant temperature checks
 #define TIME_TO_RESET 140000	// Time to completely close the 3WV if position is unknow
 #define MAX_TEMP 380		// Temperature threshold for emitter (40°C for floor heating)
 #define EPSILON_TEMP 10		// difference between the two last temperature to do nothing (door or window opened in zone)
@@ -200,12 +200,18 @@ void draw(void)
 		u8g.print(charVal);
 		u8g.print(F(" %"));
 
+		//u8g.setPrintPos(60, 20);
+		//u8g.print(F("/+"));
+		//dtostrf(heatingzone.Output, 4, 0, charVal);
+		//u8g.print(charVal);
+
 		u8g.setPrintPos(0, 30);
 		u8g.print(F("T_int:"));
 		dtostrf(heatingzone.Temperature[0] / 10., 5, 1, charVal);
 		u8g.print(charVal);
 		u8g.print(char (176));
 		u8g.print(F("C"));
+
 
 		u8g.setPrintPos(0, 40);
 		u8g.print(F("T_dep :"));
@@ -214,12 +220,28 @@ void draw(void)
 		u8g.print(char (176));
 		u8g.print(F("C"));
 
+	//	u8g.setPrintPos(60, 40);
+	//	u8g.print(F("/"));
+	//	dtostrf(heatingzone.target_3WV , 4, 0, charVal);
+	//	u8g.print(charVal);
+	//	u8g.print(char (176));
+	//	u8g.print(F("C"));
+
+
 		u8g.setPrintPos(0, 50);
 		u8g.print(F("T_ret :"));
 		dtostrf(heatingzone.Temperature[2] / 10., 5, 1, charVal);
 		u8g.print(charVal);
 		u8g.print(char (176));
 		u8g.print(F("C"));
+
+		//u8g.setPrintPos(60, 50);
+		//u8g.print(F("/"));
+		//dtostrf(heatingzone.main_Output, 5, 1, charVal);
+		//u8g.print(charVal);
+		//u8g.print(char (176));
+		//u8g.print(F("C"));
+
 #ifdef PRINT_RAM
 		u8g.setPrintPos(50, 10);
 		u8g.print(F("RAM :"));
@@ -238,6 +260,8 @@ void setup()
 
 	Serial.begin(115200);	// output
         delay(3000); //delay to wait if a skecth upload is started after reset. Not start relay for 3WV init.
+	sensors.begin();
+	sensors.setWaitForConversion(true);
 	heatingzone.begin();
 	heatingzone.target = encoderPos;
 #ifdef OLED
@@ -276,8 +300,6 @@ void setup()
 void presentation()
 {
 	sendSketchInfo("Gateway&Heating floor Sensor", "1.1");
-	sensors.begin();
-	sensors.setWaitForConversion(false);
 	// Present all sensors to controller
 	heatingzone.presentation();
 #ifdef ENERGY_METER
@@ -318,6 +340,7 @@ void loop()
 #endif
 		heatingzone.regulate_on = true;
 		send(msg_S_HEATER_FLOW_STATE.set(1), 1);
+   		heatingzone.adjust_PID();
 		heatingzone.regulate();
 		knob_changing = 0;
 	}
@@ -374,6 +397,7 @@ void receive(const MyMessage & message)
 		} else {
 			heatingzone.regulate_on = false;
 		}
+		heatingzone.adjust_PID();
 		heatingzone.regulate();
 	} else if ((message.sender == 1) && (message.type == V_STATUS)) {
 #ifdef DEBUG
@@ -389,6 +413,7 @@ void receive(const MyMessage & message)
 		if ((message.getBool() == true)
 		    && (heatingzone.regulate_on == false)) {
 			heatingzone.regulate_on = true;
+			heatingzone.adjust_PID();
 			heatingzone.regulate();
 			send(msg_S_HEATER_FLOW_STATE.set(1), 1);
 		}

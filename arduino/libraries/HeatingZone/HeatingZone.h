@@ -38,6 +38,7 @@ Parts of code by https://github.com/biuklija/Central_Heating_Regulation
 MyMessage msg_temp(CHILD_ID_TEMP, V_TEMP);	//three temp
 MyMessage msg_S_HEATER_FLOW_STATE(CHILD_ID_HEAT_STATE,V_STATUS);
 MyMessage msg_target(CHILD_ID_SET_POINT, V_HVAC_SETPOINT_HEAT);
+MyMessage msg_target_3WV(9, V_TEMP);
 //way3_PID PID (&input, &Output, &target,2, 0, 0, DIRECT);
 //PID way3_PID;
 
@@ -72,7 +73,7 @@ class HeatingZone
     double input;
     double target_3WV;
     PID *way3_PID;
-    double main_Output;
+//    double main_Output;
     double main_input;
     PID *main_PID;
 #endif 
@@ -80,13 +81,15 @@ class HeatingZone
     void begin(void);
     void presentation(void);
     void reset(void);
+    void reset_PID(void);
+    void adjust_PID(void);
     void regulate(void);
     void update(void);
     void getTempsC(void);
     void openValve(int num_step);
     void closeValve(int num_step);
     void stopServo(void);
-    void setServoTo(byte requestedPosition);
+    void setServoTo(int requestedPosition);
     void circulatorOff(void);
     void circulatorOn(void);
 
@@ -112,19 +115,7 @@ HeatingZone::HeatingZone(DallasTemperature *sensors, int *ds18b20_index, uint8_t
 	#endif
 	lastRegulation = 0;
 	last_main_Regulation = 0;
-	
-	#ifdef PPID
-		//#error error
-		//Specify the links and initial tuning parameters
-                target_3WV = 35;
-		way3_PID = new PID (&input, &Output, &target_3WV,2, 2, 0, DIRECT);
-                main_PID = new PID (&main_input, &main_Output, &target,.2, .2, 0, DIRECT);
-		way3_PID->SetOutputLimits(-200, 200);
-		main_PID->SetOutputLimits(-50, 50);
-  		//turn the PID on
- 		way3_PID->SetMode(AUTOMATIC);
-		main_PID->SetMode(AUTOMATIC);
-	#endif
+	//reset_PID();
 	
 }
 
@@ -136,6 +127,29 @@ pinMode(_ServoDirection, OUTPUT);
 digitalWrite(_PumpPin, HIGH);
 digitalWrite(_ServoDirection,HIGH);
 digitalWrite(_ServoOn, HIGH);
+getTempsC();
+#ifdef PPID
+		//#error error
+		//Specify the links and initial tuning parameters
+                target_3WV = target;
+		main_input = Temperature[0];
+		main_PID = new PID (&main_input, &target_3WV, &target,.4, 0, 0.01, DIRECT);
+
+		Output = 20;
+		way3_PID = new PID (&input, &Output, &target_3WV,.1, 0, 1., DIRECT);
+
+		//turn the PID on
+ 		way3_PID->SetMode(AUTOMATIC);
+		main_PID->SetMode(AUTOMATIC);
+
+		way3_PID->SetOutputLimits(0, 100);
+		main_PID->SetOutputLimits(0, MAX_TEMP/10.);
+
+		//main_PID->Initialize();
+	#endif
+//reset_PID();
+//Serial.print("\ntarget_3WV:");
+//Serial.print(target_3WV);
 }
 void HeatingZone::reset(void)
 {
@@ -146,6 +160,17 @@ void HeatingZone::reset(void)
 	digitalWrite(_ServoOn,HIGH);
 	servoPosition = 0;
 }
+
+void HeatingZone::reset_PID(void)
+{
+	target_3WV = target/10. + 10*(target - Temperature[0])/10.;
+	//if (target_3WV > MAX_TEMP/10.)
+	//{ 
+	//	target_3WV = MAX_TEMP/10.;
+	//}
+	send(msg_target_3WV.set(target_3WV,1));
+}
+
 void HeatingZone::presentation()
 {
 for (int i = CHILD_ID_TEMP; i < CHILD_ID_TEMP+3; i++) {
@@ -153,34 +178,15 @@ for (int i = CHILD_ID_TEMP; i < CHILD_ID_TEMP+3; i++) {
 	}
 present(CHILD_ID_HEAT_STATE, S_HVAC);
 present(CHILD_ID_SET_POINT, S_HVAC);
+present(9, S_TEMP);
 send(msg_S_HEATER_FLOW_STATE.set(1));
+send(msg_target_3WV.set(target_3WV,1));
+
 }
 void HeatingZone::update(void)
 {				
 		stopServo(); // stop the servo if necessary
-
-    		if (millis()-INTERVAL_MAIN_REG >= last_main_Regulation )
-		{
-			
-			main_input = Temperature[0];
-			main_PID->Compute();
-			if (target_3WV + main_Output > MAX_TEMP/10.)
-			{ 
-				target_3WV = MAX_TEMP/10.;
-			}
-			else
-			{
-				target_3WV += main_Output;
-			}
-			Serial.print("\nTemp:");
-			Serial.print(Temperature[0]);
-			Serial.print(" ");
-			Serial.print(target);
-			Serial.print("\nMain Output :");
-			Serial.print(main_Output);
-        	        Serial.print("\n");
-			last_main_Regulation = millis();
-		}
+    		
 		if (millis()-INTERVAL_REG >= lastRegulation && digitalRead(_ServoOn) == HIGH )// time for regulation if the servo is not running
 		{
 			regulate();
@@ -189,10 +195,36 @@ void HeatingZone::update(void)
 			//	closeValve(5);
 			//}
 		}
+		if ((millis() >= last_main_Regulation +INTERVAL_MAIN_REG) && (digitalRead(_PumpPin) == LOW))
+		{
+			adjust_PID();
+		}
 		
 }
+
+void HeatingZone::adjust_PID(void){
+			main_input = Temperature[0];
+			main_PID->Compute();
+			if (target_3WV> MAX_TEMP/10.)
+			{ 
+				target_3WV = MAX_TEMP/10.;
+			}
+			//Serial.print("\nt_3WV:");
+			//Serial.print(target_3WV);
+			//Serial.print(" ");
+			//Serial.print(main_Output);
+			//Serial.print("\nMOutput :");
+			//Serial.print(target_3WV);
+        	        //Serial.print("\n");
+
+			send(msg_target_3WV.set(target_3WV,1));
+
+			last_main_Regulation = millis();
+}
+
 void HeatingZone::regulate(void){
 		getTempsC();
+		send(msg_target_3WV.set(target_3WV,1));
 		#ifdef DEBUG
 			Serial.print("\nTemp0"+String(Temperature[0]));
 			//Serial.print("\nTemp1"+String(Temperature[1]));
@@ -206,43 +238,61 @@ void HeatingZone::regulate(void){
 			{
 		//#ifdef PPID
 		//#else
-				if ((Temperature[0] ) >= (target)  ) // we're turning temperatures into integers to compare them
+				if ((Temperature[0] ) >= (target + 20)  ) // we're turning temperatures into integers to compare them
+				//if (target_3WV == 0)
 				{
 					//closeValve(5);
 					circulatorOff();
 				}
-				else //if ((Temperature[0]) < (target  - 5)) // these values are very random and should not be used by anyone
+				else if (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP)
 				{
+				//	if ((servoPosition == 0)
+				//	{
+				//		circulatorOff();
+				//	}
 					if (digitalRead(_PumpPin) == HIGH && (Temperature[0]) < (target  - 5))
 					{
 						//circulatorOn();
 						start_circulator = true;
+						Output = 20;
+						//way3_PID = new PID (&input, &Output, &target_3WV,1, 0, 200, DIRECT);
+						//way3_PID->SetOutputLimits(0, 100);
+						//way3_PID->SetMode(MANUAL);
 						setServoTo(20);
+						//way3_PID->SetMode(AUTOMATIC);
+						
 					}
-				}
-				if (digitalRead(_PumpPin) == LOW)
-				{
-				#ifdef PPID
-					input = Temperature[1]/10.;
-					way3_PID->Compute();
-					Serial.print("\nOutput :");
-					Serial.print(int(Output));
-        		                Serial.print("\n");
-					if (abs(Output)>5.)
+					if (digitalRead(_PumpPin) == LOW)
 					{
-						setServoTo(servoPosition+int(Output));
-					}
-				#else
+					#ifdef PPID
+						input = Temperature[1]/10.;
+						Serial.print("\nint:");
+						Serial.print(input);
+						way3_PID->Compute();
+						//Serial.print("\nt3WV:");
+						//Serial.print(target_3WV);
+						//Serial.print("\n");
+						//Serial.print("\nOut:");
+						//Serial.print(Output);
+						//Serial.print("\n");
 
-					if (Temperature[1]<MAX_TEMP -50 && (Temperature[1]-Temperature_prev[1]<10))
-					{
-						openValve(5);
+        		        	        //Serial.print("\n");
+						if (abs(servoPosition - Output)>5.)
+						{
+							setServoTo(int(Output));
+						}
+					#else
+
+						if (Temperature[1]<MAX_TEMP -50 && (Temperature[1]-Temperature_prev[1]<10))
+						{
+							openValve(5);
+						}
+						else if (Temperature[1]>MAX_TEMP)
+						{
+							closeValve(5);
+						}
+					#endif
 					}
-					else if (Temperature[1]>MAX_TEMP)
-					{
-						closeValve(5);
-					}
-				#endif
 				}
 				if ((servoPosition == 100) && (Temperature[1] < 300))
 				{
@@ -264,9 +314,9 @@ void  HeatingZone::getTempsC(void)
 {
 		_sensors->requestTemperatures();
 		// query conversion time and sleep until conversion completed
-  		int16_t conversionTime = _sensors->millisToWaitForConversion(_sensors->getResolution());
+  		//int16_t conversionTime = _sensors->millisToWaitForConversion(_sensors->getResolution());
   		// sleep() call can be replaced by wait() call if node need to process incoming messages (or if node is repeater)
-  		sleep(conversionTime);
+  		//sleep(conversionTime);
 		
 		for( unsigned int i = 0; i < 3; i = i + 1 )
 		{
@@ -360,7 +410,7 @@ void HeatingZone::stopServo(void)
 	}
 }
 
-void HeatingZone::setServoTo(byte requestedPosition)
+void HeatingZone::setServoTo(int requestedPosition)
 {
 	if (requestedPosition != servoPosition && digitalRead(_ServoOn) == HIGH )
 	{
