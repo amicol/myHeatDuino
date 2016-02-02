@@ -51,7 +51,7 @@
 #define ENERGY_METER		//define 3 phases electrical comsumption feature
 //#define PPID
 #define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.
-#define PRINT_RAM
+//#define PRINT_RAM
 
 
 #ifdef OLED
@@ -220,7 +220,7 @@ void draw(void)
 		u8g.print(char (176));
 		u8g.print(F("C"));
 #ifdef PRINT_RAM
-		u8g.setPrintPos(60, 10);
+		u8g.setPrintPos(80, 10);
 		u8g.print(F("RAM :"));
 		u8g.print(freeRam ());
 #endif
