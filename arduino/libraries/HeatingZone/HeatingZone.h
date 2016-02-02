@@ -133,10 +133,10 @@ getTempsC();
 		//Specify the links and initial tuning parameters
                 target_3WV = target;
 		main_input = Temperature[0];
-		main_PID = new PID (&main_input, &target_3WV, &target,.4, 0, 0.01, DIRECT);
+		main_PID = new PID (&main_input, &target_3WV, &target,2, 2, 0., DIRECT);
 
 		Output = 20;
-		way3_PID = new PID (&input, &Output, &target_3WV,.1, 0, 1., DIRECT);
+		way3_PID = new PID (&input, &Output, &target_3WV,.1, 5, .1, DIRECT);
 
 		//turn the PID on
  		way3_PID->SetMode(AUTOMATIC);
@@ -254,12 +254,10 @@ void HeatingZone::regulate(void){
 					{
 						//circulatorOn();
 						start_circulator = true;
+						way3_PID->SetMode(MANUAL);
 						Output = 20;
-						//way3_PID = new PID (&input, &Output, &target_3WV,1, 0, 200, DIRECT);
-						//way3_PID->SetOutputLimits(0, 100);
-						//way3_PID->SetMode(MANUAL);
 						setServoTo(20);
-						//way3_PID->SetMode(AUTOMATIC);
+						way3_PID->SetMode(AUTOMATIC);
 						
 					}
 					if (digitalRead(_PumpPin) == LOW)
@@ -269,12 +267,12 @@ void HeatingZone::regulate(void){
 						Serial.print("\nint:");
 						Serial.print(input);
 						way3_PID->Compute();
-						//Serial.print("\nt3WV:");
-						//Serial.print(target_3WV);
-						//Serial.print("\n");
-						//Serial.print("\nOut:");
-						//Serial.print(Output);
-						//Serial.print("\n");
+						Serial.print("\nt3WV:");
+						Serial.print(target_3WV);
+						Serial.print("\n");
+						Serial.print("\nOut:");
+						Serial.print(Output);
+						Serial.print("\n");
 
         		        	        //Serial.print("\n");
 						if (abs(servoPosition - Output)>5.)
