@@ -36,7 +36,7 @@
 
 //#define PROBE_DALLAS
 
-#define CHILD_ID_START 8
+#define CHILD_ID_START 10
 
 #define SMOKE
 //Smoke
@@ -54,13 +54,17 @@
 #define FORECAST_CHILD_ID CHILD_ID_START+7
 
 //Relay
-#define RELAY_PUMP 6 // Relay that turns the circulator on/off
+#define RELAY_PUMP 7 // Relay that turns the circulator on/off
 #define RELAY_CHILD_ID CHILD_ID_START+8
 
 
 #define BOILER_STATUS_ID CHILD_ID_START+9
 #define REQUIRED_BOILER_TEMP 75
+#define MAX_BOILER_TEMP 85
+#define REQUIRED_GAS_TEMP 60
 
+#define BOILER_GAS_ID CHILD_ID_START+10
+#define BOILER_CIRCU_ID CHILD_ID_START+11
 
 #include <SPI.h>
 #include <MySensor.h>  
@@ -68,6 +72,7 @@
 #include <OneWire.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
+#include "MAX6675.h"
 #include <Boiler.h>
 #include <Weather.h>
 
@@ -75,7 +80,7 @@
 #define COMPARE_TEMP 1 // Send temperature only if changed? 1 = Yes 0 = No
 
 #define ONE_WIRE_BUS 3 // Pin where dallase sensor is connected 
-#define MAX_ATTACHED_DS18B20 4
+#define MAX_ATTACHED_DS18B20 3
 unsigned long SLEEP_TIME = 10000; // Sleep time between reads (in milliseconds)
 OneWire oneWire(ONE_WIRE_BUS); // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 DallasTemperature sensors(&oneWire); // Pass the oneWire reference to Dallas Temperature. 
@@ -135,5 +140,17 @@ void loop()
   #endif
   wait(SLEEP_TIME);
 }
-
-
+void receive(const MyMessage & message)
+{
+  if ((message.sender == 0) && (message.sensor == BOILER_STATUS_ID)) 
+  {
+    if (message.getBool() == true) {
+      boiler.circulator=1;
+      boiler.update();
+    } else {
+      boiler.circulator=0;
+      boiler.update();
+    }
+  }  
+  
+}

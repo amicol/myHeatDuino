@@ -25,12 +25,16 @@ Parts of code by https://github.com/mysensors/Arduino
 #include <SPI.h>
 #include <MySensor.h>
 #include <OneWire.h>
+#include "MAX6675.h"
+
 #ifdef SMOKE
 	#include "Smoke.h"
 #endif
 
 MyMessage msg_temp(0,V_TEMP);
 MyMessage msg_boiler(BOILER_STATUS_ID,V_STATUS);
+MyMessage msg_gas(BOILER_GAS_ID,V_TEMP);
+//MyMessage msg_circulator(BOILER_CIRCU_ID,V_STATUS);
 
 #ifdef PROBE_DALLAS
 // function to print a device address
@@ -44,6 +48,11 @@ void printAddress(DeviceAddress deviceAddress)
 }
 #endif
 
+int CS_pin = 4;
+int SO_pin = 5;
+int SCK_pin = 6;
+MAX6675 thermocouple(CS_pin, SO_pin, SCK_pin, 1);
+
 class Boiler
 {
 private:
@@ -52,6 +61,8 @@ DallasTemperature *_sensors;
 
 public:
 int lastTemperature[3];
+int Temperature_gas;
+int circulator;
 int *_ds18b20_index;
 bool boiler_state;
 DeviceAddress tempDeviceAddress;
@@ -75,6 +86,8 @@ void Boiler::begin(void)
 {
 pinMode(_PumpPin, OUTPUT);
 digitalWrite(_PumpPin, HIGH);
+circulator=0;
+
 // Loop through each device, print out address
 #ifdef PROBE_DALLAS                                                  
   for(int i=0;i<3; i++)
@@ -109,13 +122,16 @@ void Boiler::presentation()
 for (int i=0; i<3; i++) {   
      present(CHILD_ID_START+i, S_TEMP);
      wait(DWELL_TIME);
+}
 #ifdef SMOKE
 	smoke.presentation();
         wait(DWELL_TIME);
 #endif
 present(BOILER_STATUS_ID,S_HVAC);
+present(BOILER_GAS_ID,S_TEMP);
+present(BOILER_CIRCU_ID,S_HVAC);
 send(msg_boiler.set(false),true);
-}
+//send(msg_circulator.set(false),true);
 }
 
 void Boiler::update()
@@ -128,9 +144,9 @@ void Boiler::update()
     
     // Only send data if temperature has changed and no error
     #if COMPARE_TEMP == 1
-    if (lastTemperature[i] != temperature && temperature != -127.00 && temperature != 85.00) {
+    if (lastTemperature[i] != temperature && temperature != -127.00) {
     #else
-    if (temperature != -127.00 && temperature != 85.00) {
+    if (temperature != -127.00) {
     #endif
     #ifdef PROBE_DALLAS
       Serial.print("\n");
@@ -146,26 +162,34 @@ void Boiler::update()
     }
   }
 
-  
-  if ((lastTemperature[0]>REQUIRED_BOILER_TEMP) && (digitalRead(_PumpPin) == HIGH))
+  Temperature_gas = thermocouple.read_temp();
+  if (circulator == 1)
 	{
 		digitalWrite(_PumpPin, LOW);
                 boiler_state = true;
-		//send(msg_boiler.set(true),true);
-                //wait(DWELL_TIME);
 	}
-  else if ((lastTemperature[0]<REQUIRED_BOILER_TEMP-5) && (digitalRead(_PumpPin) == LOW))
+  else if (lastTemperature[0]>MAX_BOILER_TEMP)
+	{
+		digitalWrite(_PumpPin, LOW);
+                boiler_state = true;
+	}
+  else if ((lastTemperature[0]>REQUIRED_BOILER_TEMP) && (digitalRead(_PumpPin) == HIGH) && Temperature_gas>REQUIRED_GAS_TEMP)
+	{
+		digitalWrite(_PumpPin, LOW);
+                boiler_state = true;
+	}
+  else if ((Temperature_gas<REQUIRED_GAS_TEMP) && (digitalRead(_PumpPin) == LOW) && lastTemperature[0]<MAX_BOILER_TEMP)
 	{
 		digitalWrite(_PumpPin, HIGH);
                 boiler_state = false;
-		//send(msg_boiler.set(false),true);
-                //wait(DWELL_TIME);
 	}
   send(msg_boiler.set(boiler_state));
   wait(DWELL_TIME);
   #ifdef SMOKE
 	smoke.update();
   #endif
+  send(msg_gas.set(Temperature_gas,1));
+  //send(msg_circulator);
 }
 
 #endif

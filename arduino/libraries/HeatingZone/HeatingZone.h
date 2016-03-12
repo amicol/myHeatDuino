@@ -28,7 +28,7 @@ Parts of code by https://github.com/biuklija/Central_Heating_Regulation
 #endif
 
 #ifdef PPID	
-	#include <PID_v1.h>
+	#include "PID_v1.h"
 #endif
 #include <MySensor.h>
 
@@ -38,7 +38,7 @@ Parts of code by https://github.com/biuklija/Central_Heating_Regulation
 MyMessage msg_temp(CHILD_ID_TEMP, V_TEMP);	//three temp
 MyMessage msg_S_HEATER_FLOW_STATE(CHILD_ID_HEAT_STATE,V_STATUS);
 MyMessage msg_target(CHILD_ID_SET_POINT, V_HVAC_SETPOINT_HEAT);
-MyMessage msg_target_3WV(9, V_TEMP);
+MyMessage msg_target_3WV(CHILD_ID_3WV, V_TEMP);
 //way3_PID PID (&input, &Output, &target,2, 0, 0, DIRECT);
 //PID way3_PID;
 
@@ -136,7 +136,7 @@ getTempsC();
 		main_PID = new PID (&main_input, &target_3WV, &target,2, 2, 0., DIRECT);
 
 		Output = 20;
-		way3_PID = new PID (&input, &Output, &target_3WV,.1, 5, .1, DIRECT);
+		way3_PID = new PID (&input, &Output, &target_3WV,.2, 5, .1, DIRECT);
 
 		//turn the PID on
  		way3_PID->SetMode(AUTOMATIC);
@@ -168,7 +168,7 @@ void HeatingZone::reset_PID(void)
 	//{ 
 	//	target_3WV = MAX_TEMP/10.;
 	//}
-	send(msg_target_3WV.set(target_3WV,1));
+	send(msg_target_3WV.set((float) target_3WV,1));
 }
 
 void HeatingZone::presentation()
@@ -180,7 +180,7 @@ present(CHILD_ID_HEAT_STATE, S_HVAC);
 present(CHILD_ID_SET_POINT, S_HVAC);
 present(9, S_TEMP);
 send(msg_S_HEATER_FLOW_STATE.set(1));
-send(msg_target_3WV.set(target_3WV,1));
+send(msg_target_3WV.set((float) target_3WV,1));
 
 }
 void HeatingZone::update(void)
@@ -217,14 +217,13 @@ void HeatingZone::adjust_PID(void){
 			//Serial.print(target_3WV);
         	        //Serial.print("\n");
 
-			send(msg_target_3WV.set(target_3WV,1));
-
+			send(msg_target_3WV.set((float) target_3WV,1));
+			update_oled = 1;
 			last_main_Regulation = millis();
 }
 
 void HeatingZone::regulate(void){
 		getTempsC();
-		send(msg_target_3WV.set(target_3WV,1));
 		#ifdef DEBUG
 			Serial.print("\nTemp0"+String(Temperature[0]));
 			//Serial.print("\nTemp1"+String(Temperature[1]));
@@ -243,6 +242,7 @@ void HeatingZone::regulate(void){
 				{
 					//closeValve(5);
 					circulatorOff();
+					send(msg_S_HEATER_FLOW_STATE.set(0),1);
 				}
 				else if (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP)
 				{
@@ -264,15 +264,15 @@ void HeatingZone::regulate(void){
 					{
 					#ifdef PPID
 						input = Temperature[1]/10.;
-						Serial.print("\nint:");
-						Serial.print(input);
+						//Serial.print("\nint:");
+						//Serial.print(input);
 						way3_PID->Compute();
-						Serial.print("\nt3WV:");
-						Serial.print(target_3WV);
-						Serial.print("\n");
-						Serial.print("\nOut:");
-						Serial.print(Output);
-						Serial.print("\n");
+						//Serial.print("\nt3WV:");
+						//Serial.print(target_3WV);
+						//Serial.print("\n");
+						//Serial.print("\nOut:");
+						//Serial.print(Output);
+						//Serial.print("\n");
 
         		        	        //Serial.print("\n");
 						if (abs(servoPosition - Output)>5.)
@@ -320,15 +320,15 @@ void  HeatingZone::getTempsC(void)
 		{
 		// Fetch and round temperature to one decimal
                 float temperature = static_cast<float>(static_cast<int>((getConfig().isMetric?_sensors->getTempCByIndex(_ds18b20_index[i]):_sensors->getTempFByIndex(_ds18b20_index[i])) * 10.));
-		Temperature_prev[i] = Temperature[i];
 		Temperature[i] = temperature; // store temperature data into position [i] of the array
 		send(msg_temp.setSensor(CHILD_ID_TEMP+i).set(temperature/10.,1));
-		#ifdef OLED
+		#ifdef MYDISPLAY
 			if (Temperature_prev[i] != Temperature[i])
 			{
 				update_oled = 1;
 			}
 		#endif
+		Temperature_prev[i] = Temperature[i];
 		#ifdef DEBUG
 			Serial.print("\nTemperature "+String(i)+" ");
 			Serial.print(Temperature[i]);
@@ -347,7 +347,9 @@ void HeatingZone::openValve(int num_step)
 		digitalWrite(_ServoDirection,LOW);
 		digitalWrite(_ServoOn, LOW);
 		servoPosition = servoPosition + num_step;
-		update_oled = 1;
+		#ifdef MYDISPLAY
+			update_oled = 1;
+		#endif
                 lastRegulation = millis();
 	}
 }
@@ -363,7 +365,9 @@ void HeatingZone::closeValve(int num_step)
 		digitalWrite(_ServoDirection,HIGH);
 		digitalWrite(_ServoOn, LOW);
 		servoPosition = servoPosition - num_step;
-		update_oled = 1;
+		#ifdef MYDISPLAY
+			update_oled = 1;
+		#endif
                 lastRegulation = millis();
 	}
 }
@@ -429,7 +433,9 @@ void HeatingZone::setServoTo(int requestedPosition)
 			digitalWrite(_ServoOn, LOW);
 			servoPosition = servoPosition - abs(numberOfSteps);
 		}
-		update_oled = 1;
+		#ifdef MYDISPLAY
+			update_oled = 1;
+		#endif
 	}
 }
 void HeatingZone::circulatorOff(void)
