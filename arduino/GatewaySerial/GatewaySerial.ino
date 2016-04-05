@@ -92,11 +92,7 @@
 
 #define ONE_WIRE_BUS 7		// Pin where dallas sensor is connected
 
-#define CHILD_ID_TEMP 0
-#define CHILD_ID_HEAT_STATE 3
-#define CHILD_ID_SET_POINT 4
-#define CHILD_ID_ENERGY 5     // 4 sensors here
-#define CHILD_ID_3WV 9
+#include "ids.h"
 
 #define KNOB_ENC_PIN_1 2	// Rotary encoder input pin 1
 #define KNOB_ENC_PIN_2 3	// Rotary encoder input pin 2
@@ -536,6 +532,7 @@ void receive(const MyMessage & message)
 		Serial.print(message.sender);
 		Serial.print("\n, New status: ");
 		Serial.println(message.getBool());
+		
 #endif
 		if ((message.getBool() == true)
 		    && (heatingzone.regulate_on == false)) {
@@ -545,7 +542,6 @@ void receive(const MyMessage & message)
 			send(msg_S_HEATER_FLOW_STATE.set(1), 1);
 		}
 	} 
-#ifdef LLCD
 	else if ((message.sender == 1) && (message.sensor == 10)) {
 
 		lcd.setCursor(3, 3);
@@ -582,5 +578,4 @@ void receive(const MyMessage & message)
 	//	Serial.print("\nIncoming change for sender:");
 	//	Serial.print(message.sender);
 	//}
-#endif
 }

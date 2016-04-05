@@ -36,36 +36,36 @@
 
 //#define PROBE_DALLAS
 
-#define CHILD_ID_START 10
+//#define CHILD_ID_START 10
 
 #define SMOKE
 //Smoke
-#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3 
+//#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3 
 #define MQ_SENSOR_ANALOG_PIN 0
 
 #define WEATHER
 //Light
-#define LIGHT_CHILD_ID CHILD_ID_START+4
+//#define LIGHT_CHILD_ID CHILD_ID_START+4
 #define LIGHT_SENSOR_ANALOG_PIN 6
 
 //Pressure
-#define BARO_CHILD_ID CHILD_ID_START+5
-#define TEMP_CHILD_ID CHILD_ID_START+6
-#define FORECAST_CHILD_ID CHILD_ID_START+7
+//#define BARO_CHILD_ID CHILD_ID_START+5
+//#define TEMP_CHILD_ID CHILD_ID_START+6
+//#define FORECAST_CHILD_ID CHILD_ID_START+7
 
 //Relay
 #define RELAY_PUMP 7 // Relay that turns the circulator on/off
-#define RELAY_CHILD_ID CHILD_ID_START+8
+//#define RELAY_CHILD_ID CHILD_ID_START+8
 
 
-#define BOILER_STATUS_ID CHILD_ID_START+9
+//#define BOILER_STATUS_ID CHILD_ID_START+9
 #define REQUIRED_BOILER_TEMP 75
-#define MAX_BOILER_TEMP 85
+#define MAX_BOILER_TEMP 80
 #define REQUIRED_GAS_TEMP 60
 
-#define BOILER_GAS_ID CHILD_ID_START+10
-#define BOILER_CIRCU_ID CHILD_ID_START+11
-
+//#define BOILER_GAS_ID CHILD_ID_START+10
+//#define BOILER_CIRCU_ID CHILD_ID_START+11
+#include "ids.h"
 #include <SPI.h>
 #include <MySensor.h>  
 #include <DallasTemperature.h>
@@ -142,7 +142,7 @@ void loop()
 }
 void receive(const MyMessage & message)
 {
-  if ((message.sender == 0) && (message.sensor == BOILER_STATUS_ID)) 
+  if ((message.sender == 0) && (message.sensor == BOILER_STATUS_ID)) //command
   {
     if (message.getBool() == true) {
       boiler.circulator=1;
@@ -151,6 +151,11 @@ void receive(const MyMessage & message)
       boiler.circulator=0;
       boiler.update();
     }
-  }  
-  
+  }
+  else if (message.sensor == BOILER_STATUS_ID) //request
+  {
+    msg_boiler.setDestination(message.sender);
+    send(msg_boiler);
+    msg_boiler.setDestination(0);
+  }
 }

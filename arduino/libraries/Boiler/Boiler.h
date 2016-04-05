@@ -163,22 +163,22 @@ void Boiler::update()
   }
 
   Temperature_gas = thermocouple.read_temp();
-  if (circulator == 1)
+  if (circulator == 1) //Manual mode
 	{
 		digitalWrite(_PumpPin, LOW);
                 boiler_state = true;
 	}
-  else if (lastTemperature[0]>MAX_BOILER_TEMP)
+  else if (lastTemperature[0]>MAX_BOILER_TEMP) // circule anyway
 	{
 		digitalWrite(_PumpPin, LOW);
                 boiler_state = true;
 	}
-  else if ((lastTemperature[0]>REQUIRED_BOILER_TEMP) && (digitalRead(_PumpPin) == HIGH) && Temperature_gas>REQUIRED_GAS_TEMP)
+  else if ((lastTemperature[0]>REQUIRED_BOILER_TEMP) && (digitalRead(_PumpPin) == HIGH) && Temperature_gas>REQUIRED_GAS_TEMP) // normal mode On
 	{
 		digitalWrite(_PumpPin, LOW);
                 boiler_state = true;
 	}
-  else if ((Temperature_gas<REQUIRED_GAS_TEMP) && (digitalRead(_PumpPin) == LOW) && lastTemperature[0]<MAX_BOILER_TEMP)
+  else if ((Temperature_gas<REQUIRED_GAS_TEMP) && (digitalRead(_PumpPin) == LOW) && lastTemperature[0]<MAX_BOILER_TEMP) // normal mode Off
 	{
 		digitalWrite(_PumpPin, HIGH);
                 boiler_state = false;
