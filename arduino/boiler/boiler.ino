@@ -26,7 +26,7 @@
 
 
 // Enable debug prints to serial monitor
-//#define MY_DEBUG 
+//#define MY_DEBUG
 #define MY_NODE_ID 1
 #define DWELL_TIME 300
 
@@ -36,52 +36,58 @@
 
 //#define PROBE_DALLAS
 
-#define CHILD_ID_START 8
+//#define CHILD_ID_START 10
 
 #define SMOKE
 //Smoke
-#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3 
+//#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3
 #define MQ_SENSOR_ANALOG_PIN 0
 
 #define WEATHER
 //Light
-#define LIGHT_CHILD_ID CHILD_ID_START+4
+//#define LIGHT_CHILD_ID CHILD_ID_START+4
 #define LIGHT_SENSOR_ANALOG_PIN 6
 
 //Pressure
-#define BARO_CHILD_ID CHILD_ID_START+5
-#define TEMP_CHILD_ID CHILD_ID_START+6
-#define FORECAST_CHILD_ID CHILD_ID_START+7
+//#define BARO_CHILD_ID CHILD_ID_START+5
+//#define TEMP_CHILD_ID CHILD_ID_START+6
+//#define FORECAST_CHILD_ID CHILD_ID_START+7
 
 //Relay
-#define RELAY_PUMP 6 // Relay that turns the circulator on/off
-#define RELAY_CHILD_ID CHILD_ID_START+8
+#define RELAY_PUMP 7 // Relay that turns the circulator on/off
+//#define RELAY_CHILD_ID CHILD_ID_START+8
 
 
-#define BOILER_STATUS_ID CHILD_ID_START+9
+//#define BOILER_STATUS_ID CHILD_ID_START+9
 #define REQUIRED_BOILER_TEMP 75
+#define MAX_BOILER_TEMP 80
+#define REQUIRED_GAS_TEMP 60
 
-
+//#define BOILER_GAS_ID CHILD_ID_START+10
+//#define BOILER_CIRCU_ID CHILD_ID_START+11
+#include "ids.h"
 #include <SPI.h>
-#include <MySensor.h>  
+#include <MySensors.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
+#include "MAX6675.h"
+//#include "max6675.h"
 #include <Boiler.h>
 #include <Weather.h>
 
 //Temperature
 #define COMPARE_TEMP 1 // Send temperature only if changed? 1 = Yes 0 = No
 
-#define ONE_WIRE_BUS 3 // Pin where dallase sensor is connected 
-#define MAX_ATTACHED_DS18B20 4
+#define ONE_WIRE_BUS 3 // Pin where dallase sensor is connected
+#define MAX_ATTACHED_DS18B20 3
 unsigned long SLEEP_TIME = 10000; // Sleep time between reads (in milliseconds)
 OneWire oneWire(ONE_WIRE_BUS); // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-DallasTemperature sensors(&oneWire); // Pass the oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire); // Pass the oneWire reference to Dallas Temperature.
 float lastTemperature[MAX_ATTACHED_DS18B20];
 int numSensors=0;
-                                          
+
 boolean receivedConfig = false;
 int ds18b20_index[3]= {2,0,1};
 
@@ -92,7 +98,7 @@ Boiler boiler(&sensors,ds18b20_index,RELAY_PUMP);
 #endif
 
 
-void setup()  
+void setup()
 {
   // Startup up the OneWire library
   //sensors.begin();
@@ -106,9 +112,9 @@ void presentation() {
   sendSketchInfo("Boiler&weather Sensor", "1.1");
   // Fetch the number of attached temperature sensors
   sensors.begin();
-  sensors.setWaitForConversion(false);
+  sensors.setWaitForConversion(true);
   numSensors = sensors.getDeviceCount();
-  
+
   //Serial.print(numSensors);
 
   boiler.presentation();
@@ -117,15 +123,15 @@ void presentation() {
   #endif
 }
 
-void loop()     
-{     
+void loop()
+{
   // Fetch temperatures from Dallas sensors
   sensors.requestTemperatures();
-  
+
   // query conversion time and sleep until conversion completed
-  int16_t conversionTime = sensors.millisToWaitForConversion(sensors.getResolution());
+  //int16_t conversionTime = sensors.millisToWaitForConversion(sensors.getResolution());
   // sleep() call can be replaced by wait() call if node need to process incoming messages (or if node is repeater)
-  sleep(conversionTime);
+  //sleep(conversionTime);
 
 
 
@@ -135,5 +141,22 @@ void loop()
   #endif
   wait(SLEEP_TIME);
 }
-
-
+void receive(const MyMessage & message)
+{
+  if ((message.sender == 0) && (message.sensor == BOILER_STATUS_ID)) //command
+  {
+    if (message.getBool() == true) {
+      boiler.circulator=1;
+      boiler.update();
+    } else {
+      boiler.circulator=0;
+      boiler.update();
+    }
+  }
+  else if (message.sensor == BOILER_STATUS_ID) //request
+  {
+    msg_boiler.setDestination(message.sender);
+    send(msg_boiler);
+    msg_boiler.setDestination(0);
+  }
+}
