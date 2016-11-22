@@ -27,10 +27,10 @@ Parts of code by https://github.com/biuklija/Central_Heating_Regulation
 	#include <EEPROM.h>
 #endif
 
-#ifdef PPID	
+#ifdef PPID
 	#include "PID_v1.h"
 #endif
-#include <MySensor.h>
+#include <MySensors.h>
 
 #include "OneWire.h"
 
@@ -47,14 +47,14 @@ class HeatingZone
   private:
     uint8_t _PumpPin;
     DallasTemperature *_sensors;
-    
+
     // variables for the 3WV actuator
     unsigned long stopServoAt; // when to switch off the actuator
     uint8_t _ServoOn;
     unsigned long lastRegulation;
     unsigned long last_main_Regulation;
     //unsigned long buttonRegulationStateChange;
-    //unsigned long pumpButtonStateChange; // We need to know when the pump button was last pressed, to delay turning it on/off 
+    //unsigned long pumpButtonStateChange; // We need to know when the pump button was last pressed, to delay turning it on/off
 
   public:
     uint8_t _ServoDirection;
@@ -76,7 +76,7 @@ class HeatingZone
 //    double main_Output;
     double main_input;
     PID *main_PID;
-#endif 
+#endif
 
     void begin(void);
     void presentation(void);
@@ -116,7 +116,7 @@ HeatingZone::HeatingZone(DallasTemperature *sensors, int *ds18b20_index, uint8_t
 	lastRegulation = 0;
 	last_main_Regulation = 0;
 	//reset_PID();
-	
+
 }
 
 void HeatingZone::begin(void)
@@ -135,7 +135,8 @@ getTempsC();
 		main_input = Temperature[0];
 		main_PID = new PID (&main_input, &target_3WV, &target,2, 2, 0., DIRECT);
 
-		Output = 20;
+		Output = 0;
+		input = Temperature[1]/10.;
 		way3_PID = new PID (&input, &Output, &target_3WV,.2, 5, .1, DIRECT);
 
 		//turn the PID on
@@ -143,7 +144,8 @@ getTempsC();
 		main_PID->SetMode(AUTOMATIC);
 
 		way3_PID->SetOutputLimits(0, 100);
-		main_PID->SetOutputLimits(0, MAX_TEMP/10.);
+		main_PID->SetOutputLimits(15., MAX_TEMP/10.);
+		adjust_PID();
 
 		//main_PID->Initialize();
 	#endif
@@ -156,19 +158,24 @@ void HeatingZone::reset(void)
 	//stopServoAt = millis() + TIME_TO_RESET;
 	digitalWrite(_ServoDirection,HIGH);
 	digitalWrite(_ServoOn, LOW);
+	circulatorOn();
 	wait(TIME_TO_RESET);
 	digitalWrite(_ServoOn,HIGH);
 	servoPosition = 0;
+	circulatorOff();
 }
 
 void HeatingZone::reset_PID(void)
 {
-	target_3WV = target/10. + 10*(target - Temperature[0])/10.;
-	//if (target_3WV > MAX_TEMP/10.)
-	//{ 
-	//	target_3WV = MAX_TEMP/10.;
-	//}
-	send(msg_target_3WV.set((float) target_3WV,1));
+	if (digitalRead(_PumpPin) == HIGH)
+	{
+		start_circulator = true;
+		way3_PID->SetMode(MANUAL);
+		Output = 0;
+		setServoTo(0);
+		way3_PID->SetMode(AUTOMATIC);
+
+	}
 }
 
 void HeatingZone::presentation()
@@ -178,16 +185,16 @@ for (int i = CHILD_ID_TEMP; i < CHILD_ID_TEMP+3; i++) {
 	}
 present(CHILD_ID_HEAT_STATE, S_HVAC);
 present(CHILD_ID_SET_POINT, S_HVAC);
-present(9, S_TEMP);
+present(CHILD_ID_3WV, S_TEMP);
 send(msg_S_HEATER_FLOW_STATE.set(1));
 send(msg_target_3WV.set((float) target_3WV,1));
 
 }
 void HeatingZone::update(void)
-{				
+{
 		stopServo(); // stop the servo if necessary
-    		
-		if (millis()-INTERVAL_REG >= lastRegulation && digitalRead(_ServoOn) == HIGH )// time for regulation if the servo is not running
+
+		if (millis()-INTERVAL_REG >= lastRegulation )// time for regulation if the servo is not running
 		{
 			regulate();
 			//if (Temperature[1]>MAX_TEMP)
@@ -195,20 +202,20 @@ void HeatingZone::update(void)
 			//	closeValve(5);
 			//}
 		}
-		if ((millis() >= last_main_Regulation +INTERVAL_MAIN_REG) && (digitalRead(_PumpPin) == LOW))
+		if ((millis() >= last_main_Regulation +INTERVAL_MAIN_REG) )
 		{
 			adjust_PID();
 		}
-		
+
 }
 
 void HeatingZone::adjust_PID(void){
 			main_input = Temperature[0];
 			main_PID->Compute();
-			if (target_3WV> MAX_TEMP/10.)
-			{ 
-				target_3WV = MAX_TEMP/10.;
-			}
+		//	if (target_3WV> MAX_TEMP/10.)
+		//	{
+		//		target_3WV = MAX_TEMP/10.;
+		//	}
 			//Serial.print("\nt_3WV:");
 			//Serial.print(target_3WV);
 			//Serial.print(" ");
@@ -230,38 +237,11 @@ void HeatingZone::regulate(void){
 			//Serial.print("\n_ServoOn "+String(digitalRead(_ServoOn)));
 			//Serial.print("\nservoPosition "+String(servoPosition)+"\n");
 		#endif
-			
-			//if ( abs(Temperature[1]-Temperature_prev[1]) < EPSILON_TEMP)
-			//{
+
 			if (regulate_on == true)
 			{
-		//#ifdef PPID
-		//#else
-				if ((Temperature[0] ) >= (target + 20)  ) // we're turning temperatures into integers to compare them
-				//if (target_3WV == 0)
+				if (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP)
 				{
-					//closeValve(5);
-					circulatorOff();
-					send(msg_S_HEATER_FLOW_STATE.set(0),1);
-				}
-				else if (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP)
-				{
-				//	if ((servoPosition == 0)
-				//	{
-				//		circulatorOff();
-				//	}
-					if (digitalRead(_PumpPin) == HIGH && (Temperature[0]) < (target  - 5))
-					{
-						//circulatorOn();
-						start_circulator = true;
-						way3_PID->SetMode(MANUAL);
-						Output = 20;
-						setServoTo(20);
-						way3_PID->SetMode(AUTOMATIC);
-						
-					}
-					if (digitalRead(_PumpPin) == LOW)
-					{
 					#ifdef PPID
 						input = Temperature[1]/10.;
 						//Serial.print("\nint:");
@@ -290,9 +270,19 @@ void HeatingZone::regulate(void){
 							closeValve(5);
 						}
 					#endif
-					}
 				}
-				if ((servoPosition == 100) && (Temperature[1] < 300))
+				// if ( (servoPosition > 5) && (servoPosition < 95) )
+				if (servoPosition < 95)
+				 {
+				 	circulatorOn();
+				 	send(msg_S_HEATER_FLOW_STATE.set(1),1);
+				 }
+				//
+				else
+				// {
+				// 	circulatorOff();
+				// }
+				//if (servoPosition > 95)
 				{
 					circulatorOff();
 					regulate_on = false;
@@ -303,8 +293,6 @@ void HeatingZone::regulate(void){
 				{
 				circulatorOff();
 				}
-			//}
-		//#endif
 			lastRegulation = millis();
 }
 
@@ -315,7 +303,7 @@ void  HeatingZone::getTempsC(void)
   		//int16_t conversionTime = _sensors->millisToWaitForConversion(_sensors->getResolution());
   		// sleep() call can be replaced by wait() call if node need to process incoming messages (or if node is repeater)
   		//sleep(conversionTime);
-		
+
 		for( unsigned int i = 0; i < 3; i = i + 1 )
 		{
 		// Fetch and round temperature to one decimal
@@ -337,7 +325,7 @@ void  HeatingZone::getTempsC(void)
 }
 
 void HeatingZone::openValve(int num_step)
-{			
+{
 	if ((servoPosition+num_step <= 100) && digitalRead(_ServoOn) == HIGH && Temperature[1]<MAX_TEMP)
 	{
 		#ifdef DEBUG
@@ -355,9 +343,9 @@ void HeatingZone::openValve(int num_step)
 }
 
 void HeatingZone::closeValve(int num_step)
-{			
+{
 	if ((servoPosition - num_step >= 0) && digitalRead(_ServoOn) == HIGH)
-	{	
+	{
 		#ifdef DEBUG
 			Serial.print("\nclose valve");
 		#endif
@@ -418,15 +406,15 @@ void HeatingZone::setServoTo(int requestedPosition)
 	{
 		if (requestedPosition>100) {requestedPosition=100;}
 		if (requestedPosition<0) {requestedPosition=0;}
-		char numberOfSteps = requestedPosition - servoPosition; 
-		if (numberOfSteps > 0) // if the number is positive or higher than current, open the valve and use X steps 
+		char numberOfSteps = requestedPosition - servoPosition;
+		if (numberOfSteps > 0) // if the number is positive or higher than current, open the valve and use X steps
 		{
 			stopServoAt = millis() + (abs(numberOfSteps) * STEP_OPEN);
 			digitalWrite(_ServoDirection, LOW);
 			digitalWrite(_ServoOn, LOW);
 			servoPosition = servoPosition + numberOfSteps;
 		}
-		else if (numberOfSteps < 0) 
+		else if (numberOfSteps < 0)
 		{
 			stopServoAt = millis() + (abs(numberOfSteps)* STEP_CLOSE);
 			digitalWrite(_ServoDirection, HIGH);
@@ -440,14 +428,14 @@ void HeatingZone::setServoTo(int requestedPosition)
 }
 void HeatingZone::circulatorOff(void)
 {
-	if (digitalRead(_PumpPin) == LOW) 
+	if (digitalRead(_PumpPin) == LOW)
 	{
 		digitalWrite(_PumpPin, HIGH);
 	}
 }
 void HeatingZone::circulatorOn(void)
 {
-//	if (digitalRead(_PumpPin) == HIGH) 
+//	if (digitalRead(_PumpPin) == HIGH)
 //	{
 		digitalWrite(_PumpPin, LOW);
 	//}
@@ -457,4 +445,3 @@ void HeatingZone::circulatorOn(void)
 
 
 #endif
-

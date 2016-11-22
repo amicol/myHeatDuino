@@ -22,7 +22,7 @@ Parts of code by https://github.com/mysensors/Arduino
 #include "Arduino.h"
 #include <DallasTemperature.h>
 #include <SPI.h>
-#include <MySensor.h>
+#include <MySensors.h>
 #include <OneWire.h>
 
 
@@ -40,7 +40,7 @@ enum FORECAST
   UNKNOWN = 5     // "Unknown (More Time needed)
 };
 
-Adafruit_BMP085 bmp = Adafruit_BMP085();      // Digital Pressure Sensor 
+Adafruit_BMP085 bmp = Adafruit_BMP085();      // Digital Pressure Sensor
 float lastPressure = -1;
 float lastTemp = -1;
 int lastForecast = -1;
@@ -48,7 +48,7 @@ const int LAST_SAMPLES_COUNT = 5;
 float lastPressureSamples[LAST_SAMPLES_COUNT];
 
 // this CONVERSION_FACTOR is used to convert from Pa to kPa in forecast algorithm
-// get kPa/h be dividing hPa by 10 
+// get kPa/h be dividing hPa by 10
 #define CONVERSION_FACTOR (1.0/10.0)
 
 int minuteCount = 0;
@@ -241,7 +241,7 @@ Weather::Weather()
 void Weather::presentation()
 {
 
-if (!bmp.begin()) 
+if (!bmp.begin())
   {
     Serial.println("Could not find a valid BMP085 sensor, check wiring!");
     //while (1) {}
@@ -263,7 +263,7 @@ void Weather::begin()
 void Weather::update()
 {
 //Light
-  int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23; 
+  int lightLevel = (1023-analogRead(LIGHT_SENSOR_ANALOG_PIN))/10.23;
   Serial.println(lightLevel);
   if (lightLevel != lastLightLevel) {
       send(lightMsg.set(lightLevel));
@@ -275,7 +275,7 @@ void Weather::update()
   float pressure = bmp.readSealevelPressure(ALTITUDE) / 100.0;
   float temperature = bmp.readTemperature();
 
-  if (!metric) 
+  if (!metric)
   {
     // Convert to fahrenheit
     temperature = temperature * 9.0 / 5.0 + 32.0;
@@ -293,14 +293,14 @@ void Weather::update()
   Serial.println(weather[forecast]);
 
 
-  if (temperature != lastTemp) 
+  if (temperature != lastTemp)
   {
     send(tempMsg.set(temperature, 1));
     wait(DWELL_TIME);
     lastTemp = temperature;
   }
 
-  if (pressure != lastPressure) 
+  if (pressure != lastPressure)
   {
     send(pressureMsg.set(pressure, 0));
     wait(DWELL_TIME);

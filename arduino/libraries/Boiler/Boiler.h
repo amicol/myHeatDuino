@@ -23,9 +23,10 @@ Parts of code by https://github.com/mysensors/Arduino
 #include "Arduino.h"
 #include <DallasTemperature.h>
 #include <SPI.h>
-#include <MySensor.h>
+#include <MySensors.h>
 #include <OneWire.h>
 #include "MAX6675.h"
+//#include "max6675.h"
 
 #ifdef SMOKE
 	#include "Smoke.h"
@@ -89,7 +90,7 @@ digitalWrite(_PumpPin, HIGH);
 circulator=0;
 
 // Loop through each device, print out address
-#ifdef PROBE_DALLAS                                                  
+#ifdef PROBE_DALLAS
   for(int i=0;i<3; i++)
 
   {
@@ -111,7 +112,7 @@ circulator=0;
  Serial.println();
  }
 }
-#endif 
+#endif
 #ifdef SMOKE
 	smoke.begin();
 #endif
@@ -119,7 +120,7 @@ circulator=0;
 
 void Boiler::presentation()
 {
-for (int i=0; i<3; i++) {   
+for (int i=0; i<3; i++) {
      present(CHILD_ID_START+i, S_TEMP);
      wait(DWELL_TIME);
 }
@@ -136,12 +137,12 @@ send(msg_boiler.set(false),true);
 
 void Boiler::update()
 {
-  // Read temperatures and send them to controller 
+  // Read temperatures and send them to controller
   for (int i=0; i<3; i++) {
-    
+
     // Fetch and round temperature to one decimal
     float temperature = static_cast<float>(static_cast<int>((getConfig().isMetric?_sensors->getTempCByIndex(_ds18b20_index[i]):_sensors->getTempFByIndex(_ds18b20_index[i])) * 10.)) / 10.;
-    
+
     // Only send data if temperature has changed and no error
     #if COMPARE_TEMP == 1
     if (lastTemperature[i] != temperature && temperature != -127.00) {
@@ -163,6 +164,7 @@ void Boiler::update()
   }
 
   Temperature_gas = thermocouple.read_temp();
+	//Temperature_gas = thermocouple.readCelsius();
   if (circulator == 1) //Manual mode
 	{
 		digitalWrite(_PumpPin, LOW);

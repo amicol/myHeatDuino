@@ -26,7 +26,7 @@
 
 
 // Enable debug prints to serial monitor
-//#define MY_DEBUG 
+//#define MY_DEBUG
 #define MY_NODE_ID 1
 #define DWELL_TIME 300
 
@@ -40,7 +40,7 @@
 
 #define SMOKE
 //Smoke
-//#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3 
+//#define MQ_SENSOR_CHILD_ID CHILD_ID_START+3
 #define MQ_SENSOR_ANALOG_PIN 0
 
 #define WEATHER
@@ -67,26 +67,27 @@
 //#define BOILER_CIRCU_ID CHILD_ID_START+11
 #include "ids.h"
 #include <SPI.h>
-#include <MySensor.h>  
+#include <MySensors.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
 #include "MAX6675.h"
+//#include "max6675.h"
 #include <Boiler.h>
 #include <Weather.h>
 
 //Temperature
 #define COMPARE_TEMP 1 // Send temperature only if changed? 1 = Yes 0 = No
 
-#define ONE_WIRE_BUS 3 // Pin where dallase sensor is connected 
+#define ONE_WIRE_BUS 3 // Pin where dallase sensor is connected
 #define MAX_ATTACHED_DS18B20 3
 unsigned long SLEEP_TIME = 10000; // Sleep time between reads (in milliseconds)
 OneWire oneWire(ONE_WIRE_BUS); // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-DallasTemperature sensors(&oneWire); // Pass the oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire); // Pass the oneWire reference to Dallas Temperature.
 float lastTemperature[MAX_ATTACHED_DS18B20];
 int numSensors=0;
-                                          
+
 boolean receivedConfig = false;
 int ds18b20_index[3]= {2,0,1};
 
@@ -97,7 +98,7 @@ Boiler boiler(&sensors,ds18b20_index,RELAY_PUMP);
 #endif
 
 
-void setup()  
+void setup()
 {
   // Startup up the OneWire library
   //sensors.begin();
@@ -111,9 +112,9 @@ void presentation() {
   sendSketchInfo("Boiler&weather Sensor", "1.1");
   // Fetch the number of attached temperature sensors
   sensors.begin();
-  sensors.setWaitForConversion(false);
+  sensors.setWaitForConversion(true);
   numSensors = sensors.getDeviceCount();
-  
+
   //Serial.print(numSensors);
 
   boiler.presentation();
@@ -122,15 +123,15 @@ void presentation() {
   #endif
 }
 
-void loop()     
-{     
+void loop()
+{
   // Fetch temperatures from Dallas sensors
   sensors.requestTemperatures();
-  
+
   // query conversion time and sleep until conversion completed
-  int16_t conversionTime = sensors.millisToWaitForConversion(sensors.getResolution());
+  //int16_t conversionTime = sensors.millisToWaitForConversion(sensors.getResolution());
   // sleep() call can be replaced by wait() call if node need to process incoming messages (or if node is repeater)
-  sleep(conversionTime);
+  //sleep(conversionTime);
 
 
 

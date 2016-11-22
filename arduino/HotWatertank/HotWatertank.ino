@@ -21,30 +21,30 @@
  *******************************
  *
  * DESCRIPTION
- * The ArduinoGateway prints data received from sensors on the serial link. 
+ * The ArduinoGateway prints data received from sensors on the serial link.
  * The gateway accepts input on seral which will be sent out on radio network.
  *
  * The GW code is designed for Arduino Nano 328p / 16MHz
  *
  * Wire connections (OPTIONAL):
- * - Inclusion button should be connected between digital pin 3 and GND  
+ * - Inclusion button should be connected between digital pin 3 and GND
  * - RX/TX/ERR leds need to be connected between +5V (anode) and digital pin 6/5/4 with resistor 270-330R in a series
  *
  * LEDs (OPTIONAL):
  * - To use the feature, uncomment MY_LEDS_BLINKING_FEATURE in MyConfig.h
  * - RX (green) - blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
  * - TX (yellow) - blink fast on radio message transmitted. In inclusion mode will blink slowly
- * - ERR (red) - fast blink on error during transmission error or recieve crc error 
- * 
+ * - ERR (red) - fast blink on error during transmission error or recieve crc error
+ *
  */
 
 /**
-  Heating Zone control. 
+  Heating Zone control.
   This skectch maintain the temperature in an heating zone by powering on/off a water circulator and controlling the temperature emitter with 3 Way Valve (3WV).
   An OLED display/rotary encoder can be added to view temperature and set thermostat.
   Mysensors message permit to set thermostat and view temperatures in controller.
   Energy meter is added with Emonlib library. 3 phases here.
-*/  
+*/
 
 
 //#define OLED			//define all OLED display and rotary knob feature for a heating zone
@@ -56,12 +56,12 @@
 #define MY_NODE_ID 2
 
 // Enable debug prints to serial monitor
-#define MY_DEBUG 
+#define MY_DEBUG
 //#define MY_DEBUG_VERBOSE
 //#define DEBUG //to big with 32k card TODO : reduce string memory footprint.
 
 // Set LOW transmit power level as default, if you have an amplified NRF-module and
-// power your radio separately with a good regulator you can turn up PA level. 
+// power your radio separately with a good regulator you can turn up PA level.
 //#define MY_RF24_PA_LEVEL RF24_PA_LOW
 
 // Enable and select radio type attached
@@ -81,9 +81,9 @@
 //// Enable Inclusion mode button on gateway
 //#define MY_INCLUSION_BUTTON_FEATURE
 //// Set inclusion mode duration (in seconds)
-//#define MY_INCLUSION_MODE_DURATION 60 
+//#define MY_INCLUSION_MODE_DURATION 60
 //// Digital pin used for inclusion mode button
-//#define MY_INCLUSION_MODE_BUTTON_PIN  2 
+//#define MY_INCLUSION_MODE_BUTTON_PIN  2
 
 //#define MY_DEFAULT_ERR_LED_PIN 7  // Error led pin
 //#define MY_DEFAULT_RX_LED_PIN  8  // Receive led pin
@@ -101,7 +101,7 @@
 #define RELAY_ELEC 4    // Relay that turns the elec heating on/off
 
 #include <SPI.h>
-#include <MySensor.h>
+#include <MySensors.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <HotWatertank.h>
@@ -109,7 +109,7 @@
 
 
 OneWire oneWire(ONE_WIRE_BUS);	// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-DallasTemperature sensors(&oneWire);	// Pass the oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);	// Pass the oneWire reference to Dallas Temperature.
 
 int devices_hotwater_index[2] = {0,1}; // table for conversion between index of ds18b20 sensors and stored temperature in (int Temperature[3]).
 HotWatertank hotwater(&sensors,devices_hotwater_index, RELAY_PUMP,RELAY_ELEC);
