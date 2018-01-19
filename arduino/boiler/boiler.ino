@@ -26,8 +26,8 @@
 
 
 // Enable debug prints to serial monitor
-//#define MY_DEBUG
-#define MY_NODE_ID 1
+#define MY_DEBUG
+#define MY_NODE_ID BOILER_ID
 #define DWELL_TIME 300
 
 // Enable and select radio type attached
@@ -61,6 +61,7 @@
 //#define BOILER_STATUS_ID CHILD_ID_START+9
 #define REQUIRED_BOILER_TEMP 75
 #define MAX_BOILER_TEMP 80
+#define MIN_BOILER_TEMP 65
 #define REQUIRED_GAS_TEMP 60
 
 //#define BOILER_GAS_ID CHILD_ID_START+10

@@ -16,23 +16,36 @@
 
 /*-----( Import needed libraries )-----*/
 #include <OneWire.h>
+#include <DallasTemperature.h>
 
 /*-----( Declare Constants and Pin Numbers )-----*/
-#define SENSOR_PIN   3// Any pin 2 to 12 (not 13) and A0 to A5
+#define SENSOR_PIN   7// Any pin 2 to 12 (not 13) and A0 to A5
 
 /*-----( Declare objects )-----*/
 OneWire  ourBus(SENSOR_PIN);  // Create a 1-wire object
+DallasTemperature sensors(&ourBus);
+int numdevices=4;
 
 void setup()  /****** SETUP: RUNS ONCE ******/
 {
   Serial.begin(9600);
- 
+  sensors.begin();
+  sensors.setWaitForConversion(true);
   discoverOneWireDevices();  // Everything happens here!
 }//--(end setup )---
 
 void loop()   /****** LOOP: RUNS CONSTANTLY ******/
 {
-  // Nothing happening here
+  sensors.requestTemperatures();
+  for( unsigned int i = 0; i < numdevices; i = i + 1 )
+		{
+    delay(2000);
+		// Fetch and round temperature to one decimal
+    float temperature = static_cast<float>(static_cast<int>((sensors.getTempCByIndex(i))));
+		Serial.print("\nTemperature "+String(i)+" : ");
+		Serial.print(temperature);
+		}
+delay(2000);
 }
 
 /*-----( Declare User-written Functions )-----*/

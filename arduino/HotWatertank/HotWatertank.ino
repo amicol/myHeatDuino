@@ -53,7 +53,9 @@
 //#define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.
 //#define PRINT_RAM
 
-#define MY_NODE_ID 2
+#define MY_NODE_ID HOTWATER_ID
+#define PPID            //PID for temperature and 3-ways valve control#define PPID            //PID for temperature and 3-ways valve control
+#define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.#define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.
 
 // Enable debug prints to serial monitor
 #define MY_DEBUG
@@ -63,7 +65,8 @@
 // Set LOW transmit power level as default, if you have an amplified NRF-module and
 // power your radio separately with a good regulator you can turn up PA level.
 //#define MY_RF24_PA_LEVEL RF24_PA_LOW
-
+//#define RF24_PA_LEVEL RF24_PA_MIN
+//#define RF24_PA_LEVEL_GW RF24_PA_MIN
 // Enable and select radio type attached
 #define MY_RADIO_NRF24
 //#define MY_RADIO_RFM69
@@ -92,13 +95,36 @@
 #define ONE_WIRE_BUS 7		// Pin where dallas sensor is connected
 #include "./ids.h"
 
-#define EPSILON_TEMP_TANK 5
+#define EPSILON_TEMP_TANK 30
 #define WAIT_BEFORE_STOP 300000
 
-#define INTERVAL_REG 45000  // Interval between 3VW temperature checks
 #define INTERVAL_CHECK 5*3600*1000
+#define RELAY_HW_PUMP 2		// Relay that turns the circulator on/off
+#define RELAY_ELEC 8    // Relay that turns the elec heating on/off
+
 #define RELAY_PUMP 3		// Relay that turns the circulator on/off
-#define RELAY_ELEC 4    // Relay that turns the elec heating on/off
+#define SERVO_ON 4		// Relay that powers the 3WV actuator
+#define SERVO_DIRECTION 5	// Relay that sets the 3WV actuator direction
+#define TIME_KNOB 2000          // time before taking into account that knob has changed
+#define STEP_CLOSE 1400ul	// duration of a single step while closing the valve in ms
+#define STEP_OPEN 1400ul	// duration of a single step while opening the valve in ms
+#define DELAY_PUMP_BUTTON 5000	// How long to delay turning the circulator on?
+#define INTERVAL_REG 45000	// Interval between 3VW temperature checks
+#define INTERVAL_MAIN_REG 900000	// Interval between Ambiant temperature checks
+#define INTERVAL_TANK_READY 86400000 //How long water in tank is considered as hot
+#define TIME_TO_RESET 140000	// Time to completely close the 3WV if position is unknow
+#define MAX_TEMP 800		// Temperature threshold for emitter (40°C for floor heating)
+#define EPSILON_TEMP 10		// difference between the two last temperature to do nothing (door or window opened in zone)
+#define MAX_SERVO 100
+#define MIN_STEP 2
+#define MAX_3WAY 100
+
+#define main_PID_Kp 4  //main PID coeff
+#define main_PID_Ki 4
+#define main_PID_Kd 0
+#define way3_PID_Kp 1.9 //3 way valve PID coeff
+#define way3_PID_Ki 1
+#define way3_PID_Kd .2
 
 #include <SPI.h>
 #include <MySensors.h>
@@ -106,13 +132,16 @@
 #include <OneWire.h>
 #include <HotWatertank.h>
 #include <stdlib.h>
-
+#include <HeatingZone.h>
 
 OneWire oneWire(ONE_WIRE_BUS);	// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 DallasTemperature sensors(&oneWire);	// Pass the oneWire reference to Dallas Temperature.
 
 int devices_hotwater_index[2] = {0,1}; // table for conversion between index of ds18b20 sensors and stored temperature in (int Temperature[3]).
-HotWatertank hotwater(&sensors,devices_hotwater_index, RELAY_PUMP,RELAY_ELEC);
+int devices_heatingzone_index[3] = {2,3,4}; // table for conversion between index of ds18b20 sensors and stored temperature in (int Temperature[3]).
+
+HotWatertank hotwater(&sensors,devices_hotwater_index, RELAY_HW_PUMP,RELAY_ELEC);
+HeatingZone heatingzone(&sensors,devices_heatingzone_index, RELAY_PUMP, SERVO_ON, SERVO_DIRECTION);
 
 //index for Temperature[3]:
 //index 0: ambiant temperature ds18b20
@@ -127,6 +156,8 @@ void setup()
 	sensors.begin();
 	sensors.setWaitForConversion(true);
   hotwater.begin();
+	heatingzone.begin();
+  heatingzone.reset();
 }
 
 void presentation()
@@ -134,15 +165,18 @@ void presentation()
 	sendSketchInfo("HotWater Sensor", "1.1");
 	// Present all sensors to controller
 	hotwater.presentation();
+	heatingzone.presentation();
 }
 
 void loop()
 {
 	hotwater.update();
+	heatingzone.update();
   wait(3000);
 }
 
 void receive(const MyMessage & message)
 {
 	hotwater.receive(message);
+	heatingzone.receive(message);
 }

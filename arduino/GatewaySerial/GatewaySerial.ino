@@ -52,7 +52,7 @@
 //#define OLED			//define all OLED display and rotary knob feature for a heating zone
 #define LLCD
 #define ENERGY_METER		//define 3 phases electrical comsumption feature
-//#define PPID
+#define PPID            //PID for temperature and 3-ways valve control
 #define EEPROM_BACKUP		//thermostat temperature saved in EEPROM.
 //#define PRINT_RAM
 
@@ -66,6 +66,8 @@
 // Set LOW transmit power level as default, if you have an amplified NRF-module and
 // power your radio separately with a good regulator you can turn up PA level.
 //#define MY_RF24_PA_LEVEL RF24_PA_LOW
+//#define RF24_PA_LEVEL RF24_PA_MIN
+//#define RF24_PA_LEVEL_GW RF24_PA_MIN
 
 // Enable and select radio type attached
 #define MY_RADIO_NRF24
@@ -73,7 +75,7 @@
 
 // Enable serial gateway
 #define MY_GATEWAY_SERIAL
-
+#define MY_NODE_ID 0
 // Flash leds on rx/tx/err
 #undef MY_LEDS_BLINKING_FEATURE
 // Set blinking period
@@ -91,13 +93,12 @@
 //#define MY_DEFAULT_ERR_LED_PIN 7  // Error led pin
 //#define MY_DEFAULT_RX_LED_PIN  8  // Receive led pin
 //#define MY_DEFAULT_TX_LED_PIN  9  // the PCB, on board LED
-
-#define ONE_WIRE_BUS 7		// Pin where dallas sensor is connected
-
 #include "ids.h"
 
+#define ONE_WIRE_BUS 7		// Pin where dallas sensor is connected
 #define KNOB_ENC_PIN_1 2	// Rotary encoder input pin 1
 #define KNOB_ENC_PIN_2 3	// Rotary encoder input pin 2
+#define ENCODER_SW 4      // Rotary encoder switch pin
 //#define KNOB_BUTTON_PIN 3       // Rotary encoder button pin
 #define RELAY_PUMP 6		// Relay that turns the circulator on/off
 #define SERVO_ON 5		// Relay that powers the 3WV actuator
@@ -111,60 +112,22 @@
 #define TIME_TO_RESET 140000	// Time to completely close the 3WV if position is unknow
 #define MAX_TEMP 380		// Temperature threshold for emitter (40°C for floor heating)
 #define EPSILON_TEMP 10		// difference between the two last temperature to do nothing (door or window opened in zone)
+#define MAX_SERVO 100
+#define MIN_STEP 2
+#define MAX_3WAY 100
 
-#ifdef OLED
-#define MYDISPLAY
-#include <U8glib.h>
-#include <Encoder.h>
-//Have to choose in library u8g for init...
-U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_DEV_0 | U8G_I2C_OPT_NO_ACK | U8G_I2C_OPT_FAST);	// Fast I2C / TWI
-//Init Rotary encoder
-Encoder knob(KNOB_ENC_PIN_1, KNOB_ENC_PIN_2);
-#endif
-
-#ifdef EEPROM_BACKUP
-#include <EEPROM.h>
-#define EEPROM_ENC_POS 513
-byte encoderPos = EEPROM.read(EEPROM_ENC_POS);	//TODO: replace with mysensors SaveState.
-#else
-byte encoderPos = 200;		//Target temperature for setting knob position
-#endif
+#define main_PID_Kp 2  //main PID coeff
+#define main_PID_Ki 2
+#define main_PID_Kd 0
+#define way3_PID_Kp .2 //3 way valve PID coeff
+#define way3_PID_Ki 5
+#define way3_PID_Kd .1
 
 #include <SPI.h>
 #include <MySensors.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
-
 #include <stdlib.h>
-
-
-
-#ifdef LLCD
-#define MYDISPLAY
-#include <Encoder.h>
-#include <Wire.h>  // Comes with Arduino IDE
-// Get the LCD I2C Library here:
-// https://bitbucket.org/fmalpartida/new-liquidcrystal/downloads
-// Move any other LCD libraries to another folder or delete them
-// See Library "Docs" folder for possible commands etc.
-#include <LiquidCrystal_I2C.h>
-
-/*-----( Declare Constants )-----*/
-//none
-/*-----( Declare objects )-----*/
-// set the LCD address to 0x20 for a 20 chars 4 line display
-// Set the pins on the I2C chip used for LCD connections:
-//                    addr, en,rw,rs,d4,d5,d6,d7,bl,blpol
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
-Encoder knob(KNOB_ENC_PIN_1, KNOB_ENC_PIN_2);
-#endif
-
-#ifndef MYDISPLAY
-#undef PRINT_RAM
-#endif
-
-//Temperature
-//#define COMPARE_TEMP 1 // Send temperature only if changed? 1 = Yes 0 = No. TODO: Not used
 #include <HeatingZone.h>
 
 OneWire oneWire(ONE_WIRE_BUS);	// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
@@ -176,18 +139,9 @@ int devices_heatingzone_index[3] = {0,1,2}; // table for conversion between inde
 //index 1: input of thermal emitter ds18b20
 //index 2: output of thermal emitter ds18b20
 
-
-// servoPosition;
-long newPos;
-unsigned long knob_changing;
-
 #ifdef ENERGY_METER
-#include "EmonLib.h"		// Include Emon Library
-EnergyMonitor emon[3];
-double Irms[3];			//3 phases
-unsigned long start;		//millis()-start makes sure it doesnt get stuck in the loop if there is an error.
-unsigned long timeout = 10000;
-MyMessage msg_watt(CHILD_ID_ENERGY, V_WATT);
+#include "energy_meter.h"		// Include Emon Library
+Energy_meter energy_meter(&lcd);
 #endif
 
 HeatingZone heatingzone(&sensors,devices_heatingzone_index, RELAY_PUMP, SERVO_ON, SERVO_DIRECTION);
@@ -200,221 +154,21 @@ int freeRam () {
 }
 #endif
 
-#ifdef OLED
-char charVal[6];
-void init_display(void)
-{
-}
-void draw(void)
-{
-	// graphic commands to redraw the complete screen should be placed here
-	//u8g.setFont(u8g_font_osb21);
-	u8g.firstPage();
-	do {
-		u8g.setPrintPos(0, 10);
-		u8g.print(F("T_des:"));
-		dtostrf(encoderPos / 10., 5, 1, charVal);
-		u8g.print(charVal);
-		u8g.print(char (176));
-		u8g.print(F("C"));
-
-		u8g.setPrintPos(0, 20);
-		u8g.print(F("position:"));
-		dtostrf(heatingzone.servoPosition, 4, 0, charVal);
-		u8g.print(charVal);
-		u8g.print(F(" %"));
-
-		//u8g.setPrintPos(60, 20);
-		//u8g.print(F("/+"));
-		//dtostrf(heatingzone.Output, 4, 0, charVal);
-		//u8g.print(charVal);
-
-		u8g.setPrintPos(0, 30);
-		u8g.print(F("T_int:"));
-		dtostrf(heatingzone.Temperature[0] / 10., 5, 1, charVal);
-		u8g.print(charVal);
-		u8g.print(char (176));
-		u8g.print(F("C"));
 
 
-		u8g.setPrintPos(0, 40);
-		u8g.print(F("T_dep :"));
-		dtostrf(heatingzone.Temperature[1] / 10., 5, 1, charVal);
-		u8g.print(charVal);
-		u8g.print(char (176));
-		u8g.print(F("C"));
-
-	//	u8g.setPrintPos(60, 40);
-	//	u8g.print(F("/"));
-	//	dtostrf(heatingzone.target_3WV , 4, 0, charVal);
-	//	u8g.print(charVal);
-	//	u8g.print(char (176));
-	//	u8g.print(F("C"));
-
-
-		u8g.setPrintPos(0, 50);
-		u8g.print(F("T_ret :"));
-		dtostrf(heatingzone.Temperature[2] / 10., 5, 1, charVal);
-		u8g.print(charVal);
-		u8g.print(char (176));
-		u8g.print(F("C"));
-
-		//u8g.setPrintPos(60, 50);
-		//u8g.print(F("/"));
-		//dtostrf(heatingzone.main_Output, 5, 1, charVal);
-		//u8g.print(charVal);
-		//u8g.print(char (176));
-		//u8g.print(F("C"));
-
-#ifdef PRINT_RAM
-		u8g.setPrintPos(80, 10);
-		u8g.print(F("RAM :"));
-		u8g.print(freeRam ());
-#endif
-		//u8g.drawFrame(100,40,20,30);
-		//u8g.drawBox(100,50,20,20);
-	} while (u8g.nextPage());
-}
-#endif
-
-#ifdef LLCD
-char charVal[6];
-void init_display(void)
-{
-		lcd.clear();
-		lcd.setCursor(0, 0);
-		lcd.print(F("T"));
-		lcd.print((char)223);
-		lcd.print(F(":"));
-
-		lcd.setCursor(6, 0);
-		lcd.print(F("? /"));
-		lcd.setCursor(12, 0);
-		lcd.print(F("? /  ?"));
-
-		lcd.setCursor(0, 1);
-		lcd.print(F("Pos:"));
-		lcd.setCursor(7, 1);
-		lcd.print(F("%"));
-		lcd.setCursor(9, 1);
-		lcd.print(F("P:"));
-		lcd.setCursor(16, 1);
-		lcd.print(F("W"));
-
-		lcd.setCursor(0, 2);
-		lcd.print("PC:");
-		lcd.setCursor(6, 2);
-		lcd.print(F("? /"));
-		lcd.setCursor(12, 2);
-		lcd.print(F("? /  ?"));
-
-		lcd.setCursor(0, 3);
-		lcd.print(F("Ch:"));
-		lcd.setCursor(6, 3);
-		lcd.print(F("? /"));
-		lcd.setCursor(12, 3);
-		lcd.print(F("? /  ?"));
-#ifdef PRINT_RAM
-		lcd.setCursor(10, 1);
-		lcd.print(F("RAM:"));
-		lcd.print(freeRam ());
-#endif
-}
-void draw(void)
-{
-
-		lcd.setCursor(3, 0);
-		dtostrf(encoderPos / 10., 5, 1, charVal);
-		lcd.print(charVal);
-		lcd.setCursor(9, 0);
-		dtostrf(heatingzone.Temperature[0] / 10., 5, 1, charVal);
-		lcd.print(charVal);
-
-		lcd.setCursor(3, 1);
-		dtostrf(heatingzone.servoPosition, 4, 0, charVal);
-		lcd.print(charVal);
-
-		//lcd.setCursor(60, 20);
-		//lcd.print(F("/+"));
-		//dtostrf(heatingzone.Output, 4, 0, charVal);
-		//lcd.print(charVal);
-
-
-		lcd.setCursor(3, 2);
-		dtostrf(heatingzone.target_3WV, 5, 1, charVal);
-		lcd.print(charVal);
-		lcd.setCursor(9, 2);
-		dtostrf(heatingzone.Temperature[1] / 10., 5, 1, charVal);
-		lcd.print(charVal);
-		lcd.setCursor(15, 2);
-		dtostrf(heatingzone.Temperature[2] / 10., 5, 1, charVal);
-		lcd.print(charVal);
-	//	lcd.setCursor(60, 40);
-	//	lcd.print(F("/"));
-	//	dtostrf(heatingzone.target_3WV , 4, 0, charVal);
-	//	lcd.print(charVal);
-	//	lcd.print(char (176));
-	//	lcd.print(F("C"));
-
-
-#ifdef PRINT_RAM
-		lcd.setCursor(15, 1);
-		lcd.print(freeRam ());
-#endif
-}
-#endif
 
 void setup()
 {
 	Serial.begin(115200);	// output
-#ifdef MYDISPLAY
-	knob.write(encoderPos);
-#endif
-        delay(3000); //delay to wait if a skecth upload is started after reset. Not start relay for 3WV init.
+  delay(3000); //delay to wait if a skecth upload is started after reset. Not start relay for 3WV init.
 	sensors.begin();
-	lcd.begin(20,4);               // initialize the lcd
 	sensors.setWaitForConversion(true);
 	heatingzone.begin();
-	heatingzone.target = encoderPos;
-#ifdef OLED
-	// flip screen, if required
-	u8g.setRot180();
-
-	// set SPI backup if required
-	//u8g.setHardwareBackup(u8g_backup_avr_spi);
-
-	// assign default color value
-	u8g.setColorIndex(255);	// white
-
-	//u8g.setFont(u8g_font_unifontr);
-	//u8g.setFont(u8g_font_pixelle_micror);
-	u8g.setFont(u8g_font_6x13r);
-	//u8g.setFont(u8g_font_micro);
-	u8g.firstPage();
-	do {
-		u8g.setPrintPos(0, 30);
-		u8g.print(F("Init 3 voies"));
-	} while (u8g.nextPage());
-#endif
-
-#ifdef LLCD
-		lcd.setCursor(2, 1);
-		lcd.print(F("Init 3 voies"));
-#endif
-
-#ifdef ENERGY_METER
-	//emon1.voltage(2, 234.26, 1.7);  // Voltage: input pin, calibration, phase_shift
-	for (int i = 0 ; i < 3; i++) {    //voltage on pni A1,A2,A3
-		emon[i].current(i, 60.6); //voltage on pni A1,A2,A3
-	}
-	start = millis();
-#endif
-
+  #ifdef ENERGY_METER
+  energy_meter.begin();
+  #endif
 	heatingzone.reset();
-#ifdef LLCD
-	init_display();
-#endif
-	heatingzone.update_oled = 1;
+
 }
 
 void presentation()
@@ -423,153 +177,22 @@ void presentation()
 	// Present all sensors to controller
 	heatingzone.presentation();
 #ifdef ENERGY_METER
-	for (int i = CHILD_ID_ENERGY ; i < CHILD_ID_ENERGY+4; i++) {
-		present(i, S_POWER);
-	}
+	energy_meter.presentation();
 #endif
 }
 
 void loop()
 {
 	heatingzone.update();
-#ifdef MYDISPLAY
-	if (heatingzone.update_oled == 1) {
-		draw();
-		heatingzone.update_oled = 0;
-	}
-	newPos = knob.read();
-	if (newPos != encoderPos) {
-		encoderPos = newPos;
-		knob_changing = millis();
-		draw();
 
-	}
-	if (knob_changing != 0 && millis() - TIME_KNOB > knob_changing) {
-		encoderPos = newPos;
-#ifdef EEPROM_BACKUP
-		EEPROM.write(EEPROM_ENC_POS, encoderPos);
-#endif
-		heatingzone.target = encoderPos;
-		send(msg_target.set(encoderPos / 10., 1));
-#ifdef DEBUG
-		Serial.print(F("\ntarget:"));
-		Serial.print(heatingzone.target);
-		Serial.print(F("\nposition:"));
-		Serial.print(heatingzone.servoPosition);
-		Serial.print(F("\n"));
-#endif
-		heatingzone.regulate_on = true;
-		send(msg_S_HEATER_FLOW_STATE.set(1), 1);
-   		heatingzone.adjust_PID();
-		heatingzone.regulate();
-		knob_changing = 0;
-	}
-#endif
 #ifdef ENERGY_METER
-	if ((millis() - start) > timeout) {
-		for (int i = 0 ; i < 3; i++) {
-		Irms[i] = emon[i].calcIrms(1480);	// Calculate Irms only
-		send(msg_watt.setSensor(CHILD_ID_ENERGY+i).set(Irms[i] * 230.0,1));
-	}
-		//Serial.print(Irms*230.0);            // Apparent power
-		//Serial.print(" ");
-		//Serial.println(Irms);                // Irms
-		send(msg_watt.setSensor(CHILD_ID_ENERGY+4).set((Irms[0] + Irms[1] + Irms[2]) * 230.0, 1));
-		lcd.setCursor(11, 1);
-		dtostrf((Irms[0] + Irms[1] + Irms[2]) * 230.0, 5, 0, charVal);
-		lcd.print(charVal);
+energy_meter.update();
+#endif
 
-		start = millis();
-	}
-#endif
-#ifdef PRINT_RAM
-	  if (Ram != freeRam()) {
-	      Ram = freeRam();
-	      draw();
-	      //send(msgfreeram.set(Ram,1));
-	      }
-#endif
 	//delay(1000);
 }
 
-void receive(const MyMessage &message) {
-#ifdef DEBUG
-  		Serial.print("\nIncoming change for sensor:");
-  		Serial.print(message.sensor);
-  		Serial.print("\n, New status: ");
-  		Serial.println(message.getFloat());
-#endif
-	if (message.type == V_HVAC_SETPOINT_HEAT) {
-		heatingzone.target = int (message.getFloat() * 10);
-#ifdef MYDISPLAY
-		//encoderPos = heatingzone.target;
-		knob.write(heatingzone.target);
-		heatingzone.update_oled = 1;
-#endif
-	}
-	else if ((message.sender == 0) && message.type == V_STATUS) {
-#ifdef DEBUG
-		Serial.print("\n, New status: ");
-		Serial.println(message.getBool());
-#endif
-		if (message.getBool() == true) {
-			heatingzone.regulate_on = true;
-      heatingzone.reset_PID();
-      heatingzone.adjust_PID();
-      heatingzone.regulate();
-		} else {
-			heatingzone.regulate_on = false;
-		}
-	}
-	else if ((message.sender == 1) && (message.type == V_STATUS)) {
-#ifdef DEBUG
-		Serial.print("\n, New status: ");
-		Serial.println(message.getBool());
-
-#endif
-		if ((message.getBool() == true)
-		    && (heatingzone.regulate_on == false)) {
-			heatingzone.regulate_on = true;
-			heatingzone.adjust_PID();
-      			heatingzone.reset_PID();
-			heatingzone.regulate();
-			send(msg_S_HEATER_FLOW_STATE.set(1), 1);
-		}
-	}
-	else if ((message.sender == 1) && (message.sensor == 10)) {
-
-		lcd.setCursor(3, 3);
-		dtostrf(message.getFloat(), 5, 1, charVal);
-		lcd.print(charVal);
-
-	}
-	else if ((message.sender == 1) && (message.sensor == 11)) {
-
-		lcd.setCursor(9, 3);
-		dtostrf(message.getFloat(), 5, 1, charVal);
-		lcd.print(charVal);
-
-	}
-	else if ((message.sender == 1) && (message.sensor == 12)) {
-
-		lcd.setCursor(15, 3);
-		dtostrf(message.getFloat(), 5, 1, charVal);
-		lcd.print(charVal);
-
-	}
-	else if ((message.sender == 1) && (message.sensor == 16)) {
-
-		lcd.setCursor(15, 0);
-		dtostrf(message.getFloat(), 5, 1, charVal);
-		lcd.print(charVal);
-
-	}
-	//else {
-	//	Serial.print("\nIncoming change for sensor:");
-	//	Serial.print(message.sensor);
-	//	Serial.print("\nIncoming change for type:");
-	//	Serial.print(message.type);
-	//	Serial.print("\nIncoming change for sender:");
-	//	Serial.print(message.sender);
-	//}
+void receive(const MyMessage &message)
+{
+	heatingzone.receive(message);
 }

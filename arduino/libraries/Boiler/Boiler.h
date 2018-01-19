@@ -180,7 +180,7 @@ void Boiler::update()
 		digitalWrite(_PumpPin, LOW);
                 boiler_state = true;
 	}
-  else if ((Temperature_gas<REQUIRED_GAS_TEMP) && (digitalRead(_PumpPin) == LOW) && lastTemperature[0]<MAX_BOILER_TEMP) // normal mode Off
+  else if ((Temperature_gas<REQUIRED_GAS_TEMP) && (digitalRead(_PumpPin) == LOW) && (lastTemperature[0]<MIN_BOILER_TEMP ||lastTemperature[0]-10<lastTemperature[1])) // normal mode Off
 	{
 		digitalWrite(_PumpPin, HIGH);
                 boiler_state = false;
