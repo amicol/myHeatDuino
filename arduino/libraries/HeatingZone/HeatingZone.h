@@ -79,6 +79,12 @@ Parts of code by https://github.com/biuklija/Central_Heating_Regulation
 	#undef PRINT_RAM
 #endif
 
+MyMessage msg_temp(CHILD_ID_TEMP, V_TEMP);	//three temp
+MyMessage msg_S_HEATER_FLOW_STATE(CHILD_ID_HEAT_STATE,V_STATUS);
+MyMessage msg_target(CHILD_ID_SET_POINT, V_HVAC_SETPOINT_HEAT);
+MyMessage msg_target_3WV(CHILD_ID_3WV, V_TEMP);
+MyMessage msg_pos_3WV(CHILD_ID_3WV_POS, V_PERCENTAGE);
+
 class HeatingZone
 {
   private:
@@ -104,11 +110,6 @@ class HeatingZone
 		bool boiler_on;
     bool start_circulator;
 
-		MyMessage msg_temp{CHILD_ID_TEMP, V_TEMP};	//three temp
-		MyMessage msg_S_HEATER_FLOW_STATE{CHILD_ID_HEAT_STATE,V_STATUS};
-		MyMessage msg_target{CHILD_ID_SET_POINT, V_HVAC_SETPOINT_HEAT};
-		MyMessage msg_target_3WV{CHILD_ID_3WV, V_TEMP};
-		MyMessage msg_pos_3WV{CHILD_ID_3WV_POS, V_PERCENTAGE};
 
     #ifdef MYDISPLAY
 		// servoPosition;
@@ -196,6 +197,7 @@ void HeatingZone::begin(void)
 	digitalWrite(_ServoDirection,HIGH);
 	digitalWrite(_ServoOn, HIGH);
 	getTempsC();
+
 	#ifdef PPID
 			//#error error
 			//Specify the links and initial tuning parameters
@@ -556,9 +558,9 @@ void HeatingZone::setServoTo(int requestedPosition)
 {
 	if (requestedPosition != servoPosition && digitalRead(_ServoOn) == HIGH )
 	{
-		if (requestedPosition>100) {requestedPosition=100;}
-		if (requestedPosition<0) {requestedPosition=0;}
-		char numberOfSteps = requestedPosition - servoPosition;
+		if (requestedPosition>95) {requestedPosition=100;}
+		if (requestedPosition<5) {requestedPosition=0;}
+		int numberOfSteps = requestedPosition - servoPosition;
 		if (numberOfSteps > 0) // if the number is positive or higher than current, open the valve and use X steps
 		{
 			if (requestedPosition == 100) numberOfSteps+=20;
@@ -569,7 +571,7 @@ void HeatingZone::setServoTo(int requestedPosition)
 		}
 		else if (numberOfSteps < 0)
 		{
-			if (requestedPosition == 0) numberOfSteps-=20;
+			if (requestedPosition == 0) numberOfSteps+=20;
 			stopServoAt = millis() + (abs(numberOfSteps)* STEP_CLOSE);
 			digitalWrite(_ServoDirection, HIGH);
 			digitalWrite(_ServoOn, LOW);
@@ -785,22 +787,23 @@ void HeatingZone::receive(const MyMessage &message)
   		Serial.print("\n, New status: ");
   		Serial.println(message.getFloat());
 #endif
-	if MY_IS_GATEWAY{
-		if ((message.sender == 1) && (message.sensor == BOILER_STATUS_ID)) {
-			int i;
-		  MyMessage message2(BOILER_STATUS_ID,V_STATUS);
-		  message2.set(1);
-		  for(i=0; i< HEATINGZONE_count;i++){
-		    #ifdef DEBUG
-		  		Serial.print("\nSend message2 for :");
-		      Serial.println(HEATINGZONE_LIST[i]);
-		      Serial.print("\n");
-		    #endif
-		    message2.setDestination(HEATINGZONE_LIST[i]);
-		    send(message2);
-		  }
-	  }
-  }
+//	if MY_IS_GATEWAY{
+		// if ((message.sender == 1) && (message.sensor == BOILER_STATUS_ID)) {
+		// 	int i;
+		//   MyMessage message2(BOILER_STATUS_ID,V_STATUS);
+		//   message2.set(1);
+		//   for(i=0; i< HEATINGZONE_count;i++){
+		//     #ifdef DEBUG
+		//   		Serial.print("\nSend message2 for :");
+		//       Serial.println(HEATINGZONE_LIST[i]);
+		//       Serial.print("\n");
+		//     #endif
+		//     message2.setDestination(HEATINGZONE_LIST[i]);
+		//     send(message2);
+		//   }
+	  // }
+
+//  }
 	if ((message.type == V_HVAC_SETPOINT_HEAT) && (message.sender == 0)  && (message.destination == MY_NODE_ID)){ // Set temperature from controler
 		main_PID->SetMode(MANUAL);
 		target = int (message.getFloat() * 10);

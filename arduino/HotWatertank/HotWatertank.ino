@@ -109,12 +109,13 @@
 #define STEP_CLOSE 1400ul	// duration of a single step while closing the valve in ms
 #define STEP_OPEN 1400ul	// duration of a single step while opening the valve in ms
 #define DELAY_PUMP_BUTTON 5000	// How long to delay turning the circulator on?
-#define INTERVAL_REG 45000	// Interval between 3VW temperature checks
-#define INTERVAL_MAIN_REG 900000	// Interval between Ambiant temperature checks
-#define INTERVAL_TANK_READY 86400000 //How long water in tank is considered as hot
+#define INTERVAL_REG 45000ul	// Interval between 3VW temperature checks
+#define INTERVAL_MAIN_REG 900000ul	// Interval between Ambiant temperature checks
+#define INTERVAL_TANK_READY 86400000ul //How long water in tank is considered as hot
 #define TIME_TO_RESET 140000	// Time to completely close the 3WV if position is unknow
 #define MAX_TEMP 800		// Temperature threshold for emitter (40°C for floor heating)
 #define EPSILON_TEMP 10		// difference between the two last temperature to do nothing (door or window opened in zone)
+#define TIME_HW_ON 9000000
 #define MAX_SERVO 100
 #define MIN_STEP 2
 #define MAX_3WAY 100

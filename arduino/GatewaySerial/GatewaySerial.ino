@@ -61,7 +61,7 @@
 // Enable debug prints to serial monitor
 #define MY_DEBUG
 //#define MY_DEBUG_VERBOSE
-#define DEBUG //to big with 32k card TODO : reduce string memory footprint.
+//#define DEBUG //to big with 32k card TODO : reduce string memory footprint.
 
 // Set LOW transmit power level as default, if you have an amplified NRF-module and
 // power your radio separately with a good regulator you can turn up PA level.
@@ -99,6 +99,8 @@
 #define KNOB_ENC_PIN_1 2	// Rotary encoder input pin 1
 #define KNOB_ENC_PIN_2 3	// Rotary encoder input pin 2
 #define ENCODER_SW 4      // Rotary encoder switch pin
+#define HW_SWITCH_LED 11    //led turned On hotwatertank
+#define HW_SWITCH 18    //switch to turn On hotwatertank
 //#define KNOB_BUTTON_PIN 3       // Rotary encoder button pin
 #define RELAY_PUMP 6		// Relay that turns the circulator on/off
 #define SERVO_ON 5		// Relay that powers the 3WV actuator
@@ -144,7 +146,18 @@ int devices_heatingzone_index[3] = {0,1,2}; // table for conversion between inde
 Energy_meter energy_meter(&lcd);
 #endif
 
+#ifdef HW_SWITCH    //switch to turn manually on HotWatertank
+#include "HW_switch.h"
+HW_Switch hw_switch;
+#endif
+
+
 HeatingZone heatingzone(&sensors,devices_heatingzone_index, RELAY_PUMP, SERVO_ON, SERVO_DIRECTION);
+
+//long debouncing_time = 5; //Debouncing Time in Milliseconds
+//volatile unsigned long last_micros;
+//MyMessage message_button(CHILD_ID_HW_LEVEL,S_DIMMER);
+
 #ifdef PRINT_RAM
 float Ram = 0;
 int freeRam () {
@@ -154,8 +167,23 @@ int freeRam () {
 }
 #endif
 
+//MyMessage msg_hw_led{CHILD_ID_HW_LED, V_STATUS};	//three temp
 
-
+// void hotwater_on()
+// {
+//   uint8_t value;
+//   delay(200);
+//
+//   value = digitalRead(HW_SWITCH);
+//   if(value == HIGH) {
+//   #ifdef DEBUG
+//     Serial.print("\nButton UP");
+//   #endif
+//   // message_button.set(13);
+//   // message_button.setDestination(HOTWATER_ID);
+//   // send(message_button);
+//   }
+// }
 
 void setup()
 {
@@ -167,7 +195,11 @@ void setup()
   #ifdef ENERGY_METER
   energy_meter.begin();
   #endif
+  #ifdef HW_SWITCH_LED
+    hw_switch.begin();
+  #endif
 	heatingzone.reset();
+
 
 }
 
@@ -179,6 +211,8 @@ void presentation()
 #ifdef ENERGY_METER
 	energy_meter.presentation();
 #endif
+
+//present(CHILD_ID_HW_LED, S_DIMMER);
 }
 
 void loop()
@@ -186,13 +220,18 @@ void loop()
 	heatingzone.update();
 
 #ifdef ENERGY_METER
-energy_meter.update();
+  energy_meter.update();
 #endif
-
+#ifdef HW_SWITCH_LED
+  hw_switch.update();
+#endif
 	//delay(1000);
 }
 
 void receive(const MyMessage &message)
 {
 	heatingzone.receive(message);
+  #ifdef HW_SWITCH_LED
+    hw_switch.receive(message);
+  #endif
 }

@@ -24,6 +24,7 @@
  * http://www.mysensors.org/build/temp
  */
 
+#include "ids.h"
 
 // Enable debug prints to serial monitor
 #define MY_DEBUG
@@ -66,7 +67,7 @@
 
 //#define BOILER_GAS_ID CHILD_ID_START+10
 //#define BOILER_CIRCU_ID CHILD_ID_START+11
-#include "ids.h"
+
 #include <SPI.h>
 #include <MySensors.h>
 #include <DallasTemperature.h>

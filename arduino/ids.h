@@ -17,8 +17,10 @@
 #define CHILD_ID_SET_POINT_TANK 24
 #define CHILD_ID_HW_TEMP 25 //2 temp
 #define CHILD_ID_3WV 27
+#define BOILER_ID 1
 #define HOTWATER_ID 2
 #define CHILD_ID_HW_LEVEL 34
 #define CHILD_ID_3WV_POS 35
+#define CHILD_ID_HW_LED 36
 int HEATINGZONE_LIST[]={0,2};
 #define HEATINGZONE_count 2

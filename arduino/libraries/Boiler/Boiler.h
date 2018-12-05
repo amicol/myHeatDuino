@@ -141,7 +141,7 @@ void Boiler::update()
   for (int i=0; i<3; i++) {
 
     // Fetch and round temperature to one decimal
-    float temperature = static_cast<float>(static_cast<int>((getConfig().isMetric?_sensors->getTempCByIndex(_ds18b20_index[i]):_sensors->getTempFByIndex(_ds18b20_index[i])) * 10.)) / 10.;
+    float temperature = static_cast<float>(static_cast<int>((getControllerConfig().isMetric?_sensors->getTempCByIndex(_ds18b20_index[i]):_sensors->getTempFByIndex(_ds18b20_index[i])) * 10.)) / 10.;
 
     // Only send data if temperature has changed and no error
     #if COMPARE_TEMP == 1
