@@ -395,7 +395,7 @@ void HeatingZone::regulate(void){
 
 			if (regulate_on == true)
 			{
-				if (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP)
+				if ( (abs(Temperature[0]-Temperature_prev[0]) < EPSILON_TEMP) && digitalRead(_ServoOn) == HIGH )
 				{
 					#ifdef PPID
 						input = Temperature[1]/10.;
